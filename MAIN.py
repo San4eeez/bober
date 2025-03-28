@@ -15,8 +15,16 @@ db_params = {
 file_path = 'part.xlsx'
 df = pd.read_excel(file_path)
 
+# Очистка названий сущностей
+def clean_entity_name(name):
+    if pd.isna(name):
+        return None
+    # Удаляем лишние символы (например, цифры и специальные знаки)
+    name = re.sub(r'[^\w\s]', '', str(name)).strip()
+    return name
+
 # Выделение уникальных сущностей
-df['entity'] = df[df.columns[1]].str.replace(r" тип \d+", "", regex=True)
+df['entity'] = df[df.columns[1]].apply(clean_entity_name)
 unique_entities = df.drop_duplicates(subset='entity')['entity'].dropna().tolist()
 
 # Инициализация переменных
