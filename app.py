@@ -13,23 +13,22 @@ DB_CONFIG = {
     'port': '5432'
 }
 
-
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
-
 
 @app.route('/')
 def index():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Получаем категории и подкатегории
+    # Получаем категории и подкатегории с количеством объектов
     cur.execute("""
         SELECT c.name as category, sc.name as subcategory, 
-               COUNT(e.id) as entity_count
+               COUNT(DISTINCT o.id) as object_count
         FROM categories c
         LEFT JOIN subcategories sc ON c.id = sc.category_id
         LEFT JOIN entities e ON e.subcategory_id = sc.id
+        LEFT JOIN objects o ON o.entity_id = e.id
         GROUP BY c.name, sc.name
         ORDER BY c.name, sc.name
     """)
@@ -52,7 +51,6 @@ def index():
                            categories=[{'name': k, **v} for k, v in categories.items()],
                            entities=entities)
 
-
 @app.route('/filter')
 def filter_entities():
     category = request.args.get('category')
@@ -64,10 +62,11 @@ def filter_entities():
     # Получаем категории для боковой панели
     cur.execute("""
         SELECT c.name as category, sc.name as subcategory, 
-               COUNT(e.id) as entity_count
+               COUNT(DISTINCT o.id) as object_count
         FROM categories c
         LEFT JOIN subcategories sc ON c.id = sc.category_id
         LEFT JOIN entities e ON e.subcategory_id = sc.id
+        LEFT JOIN objects o ON o.entity_id = e.id
         GROUP BY c.name, sc.name
         ORDER BY c.name, sc.name
     """)
@@ -140,7 +139,6 @@ def search():
     finally:
         cur.close()
         conn.close()
-
 
 def get_all_data():
     """Получает все данные из БД в структурированном виде"""
@@ -241,7 +239,6 @@ def get_all_data():
     finally:
         cur.close()
         conn.close()
-
 
 if __name__ == '__main__':
     app.run(debug=True)
