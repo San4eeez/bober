@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Viewer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        {% block sidebar %}
+        <div class="categories-sidebar">
+            <h3>Категории</h3>
+            {% for category in categories %}
+            <div class="category-item">
+                <div class="category-name" onclick="toggleCategory(this)">
+                    {{ category.name }}
+                    <span class="count-badge">{{ category.count }}</span>
+                </div>
+                <div class="subcategory-list">
+                    {% for subcategory in category.subcategories %}
+                    <div class="subcategory-item"
+                         onclick="filterByCategory('{{ category.name }}', '{{ subcategory.name }}')">
+                        {{ subcategory.name }}
+                        <span class="count-badge">{{ subcategory.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endblock %}
+
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script>
+        function toggleCategory(element) {
+            element.parentElement.classList.toggle('active');
+        }
+
+        function filterByCategory(category, subcategory) {
+            window.location.href = `/filter?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

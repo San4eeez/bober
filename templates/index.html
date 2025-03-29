@@ -1,273 +1,65 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Viewer</title>
-    <style>
-        :root {
-            --primary-color: #3498db;
-            --secondary-color: #2980b9;
-            --text-color: #2c3e50;
-            --light-gray: #ecf0f1;
-            --medium-gray: #bdc3c7;
-            --dark-gray: #7f8c8d;
-            --highlight-color: #fffacd;
-            --border-radius: 6px;
-            --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
+{% extends "base.html" %}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f7fa;
-            color: var(--text-color);
-            line-height: 1.6;
-        }
+{% block content %}
+<div class="search-box">
+    <input type="text" id="search-input" placeholder="Поиск по характеристикам...">
+</div>
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+<div id="search-results"></div>
 
-        .search-box {
-            margin-bottom: 25px;
-            padding: 15px;
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-        }
-
-        #search-input {
-            width: 100%;
-            max-width: 500px;
-            padding: 10px 15px;
-            border: 1px solid var(--medium-gray);
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-
-        #search-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        .entity {
-            margin-bottom: 30px;
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            overflow: hidden;
-        }
-
-        .entity-header {
-            padding: 15px 20px;
-            background-color: var(--primary-color);
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .entity-name {
-            font-size: 22px;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .characteristics-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            padding: 15px 20px;
-            background-color: var(--light-gray);
-            border-bottom: 1px solid var(--medium-gray);
-        }
-
-        .characteristic-tag {
-            padding: 5px 10px;
-            background-color: white;
-            border-radius: 15px;
-            font-size: 14px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .characteristic-type {
-            color: var(--dark-gray);
-            font-size: 12px;
-        }
-
-        .characteristic-unit {
-            color: var(--secondary-color);
-            font-weight: 500;
-            font-size: 12px;
-        }
-
-        .objects-list {
-            padding: 10px;
-        }
-
-        .object {
-            margin-bottom: 15px;
-            border: 1px solid var(--medium-gray);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-        }
-
-        .object-header {
-            padding: 10px 15px;
-            background-color: var(--light-gray);
-            border-bottom: 1px solid var(--medium-gray);
-            font-weight: 600;
-        }
-
-        .object-name {
-            margin: 0;
-            color: var(--secondary-color);
-        }
-
-        .properties-list {
-            padding: 10px 15px;
-        }
-
-        .property {
-            display: flex;
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 1px dashed var(--medium-gray);
-        }
-
-        .property:last-child {
-            border-bottom: none;
-        }
-
-        .property-name {
-            flex: 0 0 200px;
-            font-weight: 500;
-            color: var(--text-color);
-        }
-
-        .property-value {
-            flex-grow: 1;
-        }
-
-        .range-value {
-            display: inline-block;
-            padding: 3px 8px;
-            background-color: #e8f4fc;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .unit {
-            margin-left: 5px;
-            color: var(--dark-gray);
-            font-size: 14px;
-        }
-
-        #search-results {
-            display: none;
-            margin-top: 20px;
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 20px;
-        }
-
-        .search-result-item {
-            margin-bottom: 15px;
-            padding: 15px;
-            background-color: var(--light-gray);
-            border-radius: var(--border-radius);
-        }
-
-        .search-result-item p {
-            margin: 5px 0;
-        }
-
-        .highlight {
-            background-color: var(--highlight-color);
-            padding: 0 2px;
-            border-radius: 2px;
-        }
-
-        @media (max-width: 768px) {
-            .property {
-                flex-direction: column;
-            }
-            .property-name {
-                flex: 1;
-                margin-bottom: 5px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="Поиск по характеристикам...">
+<div id="all-data">
+    {% for entity in entities %}
+    <div class="entity">
+        <div class="entity-header">
+            <h2 class="entity-name">{{ entity.name }}</h2>
+            <div class="entity-category">
+                {{ entity.category }} / {{ entity.subcategory }}
+            </div>
         </div>
 
-        <div id="search-results"></div>
+        <div class="characteristics-list">
+            {% for char in entity.characteristics %}
+            <div class="characteristic-tag">
+                <span>{{ char.name }}</span>
+                {% if char.data_type %}
+                <span class="type-badge">{{ char.data_type }}</span>
+                {% endif %}
+                {% if char.unit %}
+                <span class="unit-badge">{{ char.unit }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
 
-        <div id="all-data">
-            {% for entity in entities %}
-            <div class="entity">
-                <div class="entity-header">
-                    <h2 class="entity-name">{{ entity.name }}</h2>
+        <div class="objects-list">
+            {% for obj in entity.objects %}
+            <div class="object">
+                <div class="object-header">
+                    <h3 class="object-name">{{ obj.name }}</h3>
                 </div>
-
-                <div class="characteristics-list">
+                <div class="properties-list">
                     {% for char in entity.characteristics %}
-                    <div class="characteristic-tag">
-                        <span>{{ char.name }}</span>
-                        {% if char.data_type %}
-                        <span class="characteristic-type">{{ char.data_type }}</span>
-                        {% endif %}
-                        {% if char.unit %}
-                        <span class="characteristic-unit">{{ char.unit }}</span>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <div class="objects-list">
-                    {% for obj in entity.objects %}
-                    <div class="object">
-                        <div class="object-header">
-                            <h3 class="object-name">{{ obj.name }}</h3>
-                        </div>
-                        <div class="properties-list">
-                            {% for char in entity.characteristics %}
-                            <div class="property">
-                                <div class="property-name">{{ char.name }}</div>
-                                <div class="property-value">
-                                    {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
-                                        {% set value = obj.characteristics_info[char.id|string].value %}
-                                        {% if '...' in value %}
-                                            {% set parts = value.split('...') %}
-                                            <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
-                                        {% elif value.startswith('≥') %}
-                                            <span class="range-value">≥ {{ value[1:] }}</span>
-                                        {% elif value.startswith('≤') %}
-                                            <span class="range-value">≤ {{ value[1:] }}</span>
-                                        {% else %}
-                                            {{ value }}
-                                        {% endif %}
-                                        {% if obj.characteristics_info[char.id|string].unit %}
-                                            <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <span style="color: var(--dark-gray);">—</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
+                    <div class="property">
+                        <div class="property-name">{{ char.name }}</div>
+                        <div class="property-value">
+                            {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
+                                {% set value = obj.characteristics_info[char.id|string].value %}
+                                {% if '...' in value %}
+                                    {% set parts = value.split('...') %}
+                                    <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
+                                {% elif value.startswith('≥') %}
+                                    <span class="range-value">≥ {{ value[1:] }}</span>
+                                {% elif value.startswith('≤') %}
+                                    <span class="range-value">≤ {{ value[1:] }}</span>
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                                {% if obj.characteristics_info[char.id|string].unit %}
+                                    <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="empty-value">—</span>
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}
@@ -276,49 +68,50 @@
             {% endfor %}
         </div>
     </div>
+    {% endfor %}
+</div>
 
-    <script>
-        document.getElementById('search-input').addEventListener('input', function() {
-            const query = this.value.trim();
-            const resultsDiv = document.getElementById('search-results');
-            const allDataDiv = document.getElementById('all-data');
+<script>
+    document.getElementById('search-input').addEventListener('input', function() {
+        const query = this.value.trim();
+        const resultsDiv = document.getElementById('search-results');
+        const allDataDiv = document.getElementById('all-data');
 
-            if (query.length > 0) {
-                fetch(`/search?q=${encodeURIComponent(query)}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.length > 0) {
-                            let html = '<h3>Результаты поиска:</h3>';
-                            data.forEach(item => {
-                                html += `
-                                    <div class="search-result-item">
-                                        <p><strong>${highlight(item.entity, query)}</strong></p>
-                                        <p>Объект: ${highlight(item.object, query)}</p>
-                                        <p>Характеристика: ${highlight(item.characteristic, query)}</p>
-                                        <p>Значение: ${highlight(item.value, query)}</p>
-                                    </div>
-                                `;
-                            });
-                            resultsDiv.innerHTML = html;
-                            resultsDiv.style.display = 'block';
-                            allDataDiv.style.display = 'none';
-                        } else {
-                            resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
-                            resultsDiv.style.display = 'block';
-                            allDataDiv.style.display = 'none';
-                        }
-                    });
-            } else {
-                resultsDiv.style.display = 'none';
-                allDataDiv.style.display = 'block';
-            }
-        });
-
-        function highlight(text, query) {
-            if (!query || !text) return text;
-            const re = new RegExp(query, 'gi');
-            return text.toString().replace(re, match => `<span class="highlight">${match}</span>`);
+        if (query.length > 0) {
+            fetch(`/search?q=${encodeURIComponent(query)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        let html = '<h3>Результаты поиска:</h3>';
+                        data.forEach(item => {
+                            html += `
+                                <div class="search-result">
+                                    <p><strong>${highlight(item.entity, query)}</strong></p>
+                                    <p>Объект: ${highlight(item.object, query)}</p>
+                                    <p>Характеристика: ${highlight(item.characteristic, query)}</p>
+                                    <p>Значение: ${highlight(item.value, query)}</p>
+                                </div>
+                            `;
+                        });
+                        resultsDiv.innerHTML = html;
+                        resultsDiv.style.display = 'block';
+                        allDataDiv.style.display = 'none';
+                    } else {
+                        resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+                        resultsDiv.style.display = 'block';
+                        allDataDiv.style.display = 'none';
+                    }
+                });
+        } else {
+            resultsDiv.style.display = 'none';
+            allDataDiv.style.display = 'block';
         }
-    </script>
-</body>
-</html>
+    });
+
+    function highlight(text, query) {
+        if (!query || !text) return text;
+        const re = new RegExp(query, 'gi');
+        return text.toString().replace(re, match => `<span class="highlight">${match}</span>`);
+    }
+</script>
+{% endblock %}

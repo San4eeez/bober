@@ -1,0 +1,305 @@
+:root {
+    --primary-color: #3498db;
+    --primary-dark: #2980b9;
+    --secondary-color: #2ecc71;
+    --text-color: #2c3e50;
+    --light-gray: #ecf0f1;
+    --medium-gray: #bdc3c7;
+    --dark-gray: #7f8c8d;
+    --highlight-color: #fffacd;
+    --border-radius: 6px;
+    --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f7fa;
+    color: var(--text-color);
+    line-height: 1.6;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    gap: 20px;
+}
+
+/* Стили для категорий */
+.categories-sidebar {
+    width: 280px;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 15px;
+    position: sticky;
+    top: 20px;
+    height: fit-content;
+}
+
+.categories-sidebar h3 {
+    margin-bottom: 15px;
+    color: var(--primary-dark);
+}
+
+.category-item {
+    margin-bottom: 10px;
+}
+
+.category-name {
+    padding: 8px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.subcategory-list {
+    padding-left: 15px;
+    margin-top: 5px;
+    display: none;
+}
+
+.category-item.active .subcategory-list {
+    display: block;
+}
+
+.subcategory-item {
+    padding: 6px 10px;
+    margin: 4px 0;
+    background-color: var(--light-gray);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    transition: background-color 0.2s;
+}
+
+.subcategory-item:hover {
+    background-color: var(--medium-gray);
+}
+
+.count-badge {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8em;
+}
+
+/* Основное содержимое */
+.main-content {
+    flex-grow: 1;
+}
+
+.search-box {
+    margin-bottom: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+#search-input {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid var(--medium-gray);
+    border-radius: var(--border-radius);
+    font-size: 16px;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* Стили для сущностей */
+.entity {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 25px;
+    overflow: hidden;
+}
+
+.entity-header {
+    padding: 15px 20px;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.entity-name {
+    font-size: 1.4em;
+    font-weight: 600;
+}
+
+.entity-category {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.characteristics-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px 20px;
+    background-color: var(--light-gray);
+    border-bottom: 1px solid var(--medium-gray);
+}
+
+.characteristic-tag {
+    padding: 5px 12px;
+    background-color: white;
+    border-radius: 15px;
+    font-size: 0.9em;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.type-badge {
+    color: var(--dark-gray);
+    font-size: 0.8em;
+    background: var(--light-gray);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.unit-badge {
+    color: var(--primary-dark);
+    font-weight: 500;
+    font-size: 0.8em;
+}
+
+/* Стили для объектов */
+.objects-list {
+    padding: 10px;
+}
+
+.object {
+    border: 1px solid var(--medium-gray);
+    border-radius: var(--border-radius);
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.object-header {
+    padding: 10px 15px;
+    background-color: var(--light-gray);
+    border-bottom: 1px solid var(--medium-gray);
+}
+
+.object-name {
+    font-size: 1.1em;
+    color: var(--primary-dark);
+}
+
+.properties-list {
+    padding: 10px 15px;
+}
+
+.property {
+    display: flex;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--medium-gray);
+}
+
+.property:last-child {
+    border-bottom: none;
+}
+
+.property-name {
+    flex: 0 0 200px;
+    font-weight: 500;
+    padding-right: 15px;
+}
+
+.property-value {
+    flex-grow: 1;
+}
+
+.range-value {
+    display: inline-block;
+    padding: 3px 8px;
+    background-color: #e8f4fc;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+
+.unit {
+    margin-left: 5px;
+    color: var(--dark-gray);
+    font-size: 0.9em;
+}
+
+.empty-value {
+    color: var(--dark-gray);
+    font-style: italic;
+}
+
+/* Стили для поиска */
+#search-results {
+    display: none;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.search-result {
+    padding: 15px;
+    background-color: var(--light-gray);
+    border-radius: var(--border-radius);
+    margin-bottom: 15px;
+}
+
+.search-result p {
+    margin: 5px 0;
+}
+
+.highlight {
+    background-color: var(--highlight-color);
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+
+    .categories-sidebar {
+        width: 100%;
+        position: static;
+        margin-bottom: 20px;
+    }
+
+    .property {
+        flex-direction: column;
+    }
+
+    .property-name {
+        flex: 1;
+        margin-bottom: 5px;
+        padding-right: 0;
+    }
+}
