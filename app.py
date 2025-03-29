@@ -236,6 +236,7 @@ def get_all_data():
 
         return result
 
+
     finally:
         cur.close()
         conn.close()
