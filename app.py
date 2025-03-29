@@ -32,7 +32,7 @@ def get_all_data():
     try:
         # Получаем все сущности с их характеристиками
         cur.execute("""
-            SELECT e.id, e.name, ec.id, ec.name, ec.data_type
+            SELECT e.id, e.name, ec.id, ec.name, ec.data_type, ec.unit
             FROM entities e
             LEFT JOIN entity_characteristics ec ON e.id = ec.entity_id
             ORDER BY e.name, ec.name;
@@ -42,7 +42,7 @@ def get_all_data():
         characteristics = {}  # Словарь для быстрого доступа к характеристикам
 
         for row in cur.fetchall():
-            entity_id, entity_name, char_id, char_name, data_type = row
+            entity_id, entity_name, char_id, char_name, data_type, unit = row
             if entity_id not in entities:
                 entities[entity_id] = {
                     'id': entity_id,
@@ -54,7 +54,8 @@ def get_all_data():
                 char_info = {
                     'id': char_id,
                     'name': char_name,
-                    'data_type': data_type
+                    'data_type': data_type,
+                    'unit': unit
                 }
                 entities[entity_id]['characteristics'].append(char_info)
                 characteristics[char_id] = char_info
@@ -84,17 +85,16 @@ def get_all_data():
         # Преобразуем в список и добавляем информацию о характеристиках в объекты
         result = []
         for entity in entities.values():
-            # Создаем список ID характеристик для быстрой проверки
-            char_ids = [str(char['id']) for char in entity['characteristics']]
-
             # Добавляем информацию о характеристиках в каждый объект
             for obj in entity['objects']:
                 obj['characteristics_info'] = {}
                 for char_id, value in obj['values'].items():
                     if int(char_id) in characteristics:
+                        char_info = characteristics[int(char_id)]
                         obj['characteristics_info'][char_id] = {
-                            'name': characteristics[int(char_id)]['name'],
-                            'value': value
+                            'name': char_info['name'],
+                            'value': value,
+                            'unit': char_info['unit']
                         }
 
             result.append(entity)
@@ -122,7 +122,8 @@ def search():
                 e.name AS entity,
                 o.name AS object,
                 ec.name AS characteristic,
-                ov.value AS value
+                ov.value AS value,
+                ec.unit AS unit
             FROM object_values ov
             JOIN objects o ON ov.object_id = o.id
             JOIN entities e ON o.entity_id = e.id
@@ -133,11 +134,15 @@ def search():
 
         results = []
         for row in cur.fetchall():
+            entity, object_name, characteristic, value, unit = row
+            display_value = f"{value} {unit}" if unit else value
             results.append({
-                'entity': row[0],
-                'object': row[1],
-                'characteristic': row[2],
-                'value': row[3]
+                'entity': entity,
+                'object': object_name,
+                'characteristic': characteristic,
+                'value': display_value,
+                'raw_value': value,
+                'unit': unit
             })
 
         return jsonify(results)

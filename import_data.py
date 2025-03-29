@@ -1,7 +1,7 @@
-import pandas as pd
 import psycopg2
-import re
+import pandas as pd
 from tqdm import tqdm
+import re
 
 # Конфигурация БД
 DB_CONFIG = {
@@ -13,7 +13,67 @@ DB_CONFIG = {
 }
 
 
+def init_database():
+    """Инициализирует структуру базы данных"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    try:
+        # Удаляем существующие таблицы (для чистой установки)
+        cur.execute("DROP TABLE IF EXISTS object_values")
+        cur.execute("DROP TABLE IF EXISTS objects")
+        cur.execute("DROP TABLE IF EXISTS entity_characteristics")
+        cur.execute("DROP TABLE IF EXISTS entities")
+
+        # Создаем таблицы
+        cur.execute("""
+            CREATE TABLE entities (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) UNIQUE NOT NULL,
+                description TEXT
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE entity_characteristics (
+                id SERIAL PRIMARY KEY,
+                entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                data_type VARCHAR(50),
+                unit VARCHAR(50),
+                UNIQUE(entity_id, name)
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE objects (
+                id SERIAL PRIMARY KEY,
+                entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                UNIQUE(entity_id, name)
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE object_values (
+                id SERIAL PRIMARY KEY,
+                object_id INTEGER NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+                characteristic_id INTEGER NOT NULL REFERENCES entity_characteristics(id),
+                value TEXT,
+                UNIQUE(object_id, characteristic_id)
+            )
+        """)
+
+        print("База данных успешно инициализирована")
+
+    finally:
+        cur.close()
+        conn.close()
+
+
 def get_db_connection():
+    """Возвращает соединение с базой данных"""
     return psycopg2.connect(**DB_CONFIG)
 
 
@@ -43,7 +103,7 @@ def parse_excel(file_path):
             current_entity = row['entity']
             if current_entity not in data:
                 data[current_entity] = {
-                    'characteristics': set(),
+                    'characteristics': {},  # Теперь храним словарь с характеристиками и единицами измерения
                     'objects': {}
                 }
 
@@ -54,12 +114,21 @@ def parse_excel(file_path):
             if current_object not in data[current_entity]['objects']:
                 data[current_entity]['objects'][current_object] = {}
 
-        # Добавляем характеристики
+        # Добавляем характеристики и их единицы измерения
         characteristic = row.iloc[5]
-        value = row.iloc[8] if pd.notna(row.iloc[8]) else row.iloc[9]
+        unit = row.iloc[10] if pd.notna(row.iloc[10]) and row.iloc[10] != '-' else None
+
+        value = (row.iloc[6] if pd.notna(row.iloc[6]) else
+                 row.iloc[7] if pd.notna(row.iloc[7]) else
+                 row.iloc[8] if pd.notna(row.iloc[8]) else
+                 row.iloc[9])
 
         if pd.notna(characteristic) and current_entity and current_object:
-            data[current_entity]['characteristics'].add(characteristic)
+            # Сохраняем характеристику и единицу измерения
+            if characteristic not in data[current_entity]['characteristics']:
+                data[current_entity]['characteristics'][characteristic] = unit
+
+            # Сохраняем значение характеристики для объекта
             data[current_entity]['objects'][current_object][characteristic] = value
 
     return data
@@ -84,12 +153,14 @@ def import_to_database(data):
                 cur.execute("SELECT id FROM entities WHERE name = %s;", (entity_name,))
                 entity_id = cur.fetchone()[0]
 
-            # Добавляем характеристики сущности
-            for char_name in entity_data['characteristics']:
+            # Добавляем характеристики сущности с единицами измерения
+            for char_name, unit in entity_data['characteristics'].items():
                 cur.execute(
-                    """INSERT INTO entity_characteristics (entity_id, name)
-                    VALUES (%s, %s) ON CONFLICT (entity_id, name) DO NOTHING;""",
-                    (entity_id, char_name)
+                    """INSERT INTO entity_characteristics (entity_id, name, unit)
+                    VALUES (%s, %s, %s) 
+                    ON CONFLICT (entity_id, name) 
+                    DO UPDATE SET unit = EXCLUDED.unit;""",
+                    (entity_id, char_name, unit)
                 )
 
         # Импорт объектов и их значений
@@ -145,15 +216,25 @@ def import_to_database(data):
         conn.close()
 
 
-if __name__ == '__main__':
+def main():
+    # Инициализация базы данных
+    init_database()
+
+    # Путь к файлу Excel
     file_path = 'part.xlsx'
+
     print(f"Анализ файла {file_path}...")
     structured_data = parse_excel(file_path)
 
     print("\nНайдены следующие данные:")
     for entity, data in structured_data.items():
         print(f"\nСущность: {entity}")
-
+        print(f"Характеристики: {len(data['characteristics'])}")
+        print(f"Объекты: {len(data['objects'])}")
 
     print("\nНачинаем импорт в базу данных...")
     import_to_database(structured_data)
+
+
+if __name__ == '__main__':
+    main()
