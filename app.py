@@ -30,7 +30,7 @@ def get_all_data():
     cur = conn.cursor()
 
     try:
-        # Получаем все сущности с их характеристиками
+        # Получаем все сущности с их характеристиками (включая единицы измерения)
         cur.execute("""
             SELECT e.id, e.name, ec.id, ec.name, ec.data_type, ec.unit
             FROM entities e
@@ -85,7 +85,6 @@ def get_all_data():
         # Преобразуем в список и добавляем информацию о характеристиках в объекты
         result = []
         for entity in entities.values():
-            # Добавляем информацию о характеристиках в каждый объект
             for obj in entity['objects']:
                 obj['characteristics_info'] = {}
                 for char_id, value in obj['values'].items():

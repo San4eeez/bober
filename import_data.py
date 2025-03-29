@@ -118,21 +118,30 @@ def parse_excel(file_path):
         characteristic = row.iloc[5]
         unit = row.iloc[10] if pd.notna(row.iloc[10]) and row.iloc[10] != '-' else None
 
-        value = (row.iloc[6] if pd.notna(row.iloc[6]) else
-                 row.iloc[7] if pd.notna(row.iloc[7]) else
-                 row.iloc[8] if pd.notna(row.iloc[8]) else
-                 row.iloc[9])
+        # Получаем минимальное и максимальное значения
+        min_value = row.iloc[6] if pd.notna(row.iloc[6]) else None
+        max_value = row.iloc[7] if pd.notna(row.iloc[7]) else None
 
+        # Формируем значение для характеристики
         if pd.notna(characteristic) and current_entity and current_object:
             # Сохраняем характеристику и единицу измерения
             if characteristic not in data[current_entity]['characteristics']:
                 data[current_entity]['characteristics'][characteristic] = unit
 
-            # Сохраняем значение характеристики для объекта
-            data[current_entity]['objects'][current_object][characteristic] = value
+            # Формируем значение в зависимости от наличия min/max
+            if min_value is not None and max_value is not None:
+                value = f"{min_value}...{max_value}"
+            elif min_value is not None:
+                value = f"≥{min_value}"
+            elif max_value is not None:
+                value = f"≤{max_value}"
+            else:
+                value = row.iloc[8] if pd.notna(row.iloc[8]) else row.iloc[9] if pd.notna(row.iloc[9]) else None
+
+            if value is not None:
+                data[current_entity]['objects'][current_object][characteristic] = value
 
     return data
-
 
 def import_to_database(data):
     """Импортирует структурированные данные в БД"""
