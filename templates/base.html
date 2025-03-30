@@ -71,8 +71,8 @@
 
             fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(selectedEntity)}`)
                 .then(res => res.json())
-                .then(data => {
-                    populateFilters(data);
+                .then(characteristics => {
+                    populateFilters(characteristics);
                 });
         }
 
@@ -81,14 +81,29 @@
             const container = document.getElementById('filters-container');
             container.innerHTML = ''; // Очищаем контейнер
 
-            for (const charName of characteristics) {
+            characteristics.forEach(charName => {
                 const div = document.createElement('div');
                 div.innerHTML = `
                     <label>${charName}:</label>
-                    <input type="text" placeholder="Введите значение" data-char="${charName}">
+                    <select data-char="${charName}">
+                        <option value="">-- Выберите значение --</option>
+                    </select>
                 `;
                 container.appendChild(div);
-            }
+
+                // Загружаем уникальные значения для характеристики
+                fetch(`/get_characteristic_values?entity_name=${encodeURIComponent(selectedEntity)}&characteristic_name=${encodeURIComponent(charName)}`)
+                    .then(res => res.json())
+                    .then(values => {
+                        const select = div.querySelector('select');
+                        values.forEach(value => {
+                            const option = document.createElement('option');
+                            option.value = value;
+                            option.textContent = value;
+                            select.appendChild(option);
+                        });
+                    });
+            });
         }
 
         // Применение фильтров
@@ -98,12 +113,12 @@
                 return;
             }
 
-            const inputs = document.querySelectorAll('#filters-container input');
+            const selects = document.querySelectorAll('#filters-container select');
             const filters = {};
 
-            inputs.forEach(input => {
-                const charName = input.getAttribute('data-char');
-                const value = input.value.trim();
+            selects.forEach(select => {
+                const charName = select.getAttribute('data-char');
+                const value = select.value.trim();
                 if (value) {
                     filters[charName] = value;
                 }
