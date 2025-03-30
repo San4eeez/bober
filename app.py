@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, jsonify
 import psycopg2
-from psycopg2 import sql
 
 app = Flask(__name__)
 
@@ -140,8 +139,100 @@ def search():
         cur.close()
         conn.close()
 
+@app.route('/get_characteristics_for_entity')
+def get_characteristics_for_entity():
+    """Получает список характеристик для конкретной сущности"""
+    entity_name = request.args.get('entity_name')
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT ec.name 
+            FROM entity_characteristics ec
+            JOIN entities e ON ec.entity_id = e.id
+            WHERE e.name = %s
+        """, (entity_name,))
+        characteristics = [row[0] for row in cur.fetchall()]
+        return jsonify(characteristics)
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/get_characteristic_values')
+def get_characteristic_values():
+    """Получает уникальные значения для характеристики"""
+    entity_name = request.args.get('entity_name')
+    characteristic_name = request.args.get('characteristic_name')
+
+    if not entity_name or not characteristic_name:
+        return jsonify([])
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT DISTINCT ov.value
+            FROM object_values ov
+            JOIN objects o ON ov.object_id = o.id
+            JOIN entities e ON o.entity_id = e.id
+            JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            WHERE e.name = %s AND ec.name = %s
+        """, (entity_name, characteristic_name))
+        values = [row[0] for row in cur.fetchall()]
+        return jsonify(values)
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/filter_by_params', methods=['POST'])
+def filter_by_params():
+    data = request.json
+    entity_name = data.get('entity')
+    filters = data.get('filters')
+
+    if not entity_name or not filters:
+        return jsonify([])
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        query = """
+            SELECT e.name AS entity, o.name AS object, ec.name AS characteristic, ov.value
+            FROM object_values ov
+            JOIN objects o ON ov.object_id = o.id
+            JOIN entities e ON o.entity_id = e.id
+            JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            WHERE e.name = %s
+        """
+        params = [entity_name]
+
+        for char_name, value in filters.items():
+            query += " AND ec.name = %s AND ov.value = %s"
+            params.extend([char_name, value])
+
+        cur.execute(query, params)
+        results = cur.fetchall()
+
+        filtered_data = []
+        for row in results:
+            entity, object_name, characteristic, value = row
+            filtered_data.append({
+                'entity': entity,
+                'object': object_name,
+                'characteristic': characteristic,
+                'value': value
+            })
+
+        return jsonify(filtered_data)
+
+    finally:
+        cur.close()
+        conn.close()
+
 def get_all_data():
-    """Получает все данные из БД в структурированном виде"""
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -218,10 +309,8 @@ def get_all_data():
             if obj_id in objects and char_id in characteristics:
                 objects[obj_id]['values'][str(char_id)] = value
 
-        # 5. Формируем итоговую структуру
         result = []
         for entity in entities.values():
-            # Добавляем информацию о характеристиках к каждому объекту
             for obj in entity['objects']:
                 obj['characteristics_info'] = {}
                 for char_id, value in obj['values'].items():
@@ -235,7 +324,6 @@ def get_all_data():
             result.append(entity)
 
         return result
-
 
     finally:
         cur.close()

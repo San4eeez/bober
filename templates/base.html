@@ -29,6 +29,26 @@
             </div>
             {% endfor %}
         </div>
+
+        <!-- Выбор сущности -->
+        <div class="entity-selector">
+            <h3>Выберите сущность</h3>
+            <select id="entity-select" onchange="loadFiltersForEntity()">
+                <option value="">-- Выберите сущность --</option>
+                {% for entity in entities %}
+                <option value="{{ entity.name }}">{{ entity.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Блок фильтров -->
+        <div class="filters-section">
+            <h3>Фильтры</h3>
+            <form id="filters-form">
+                <div id="filters-container"></div>
+                <button type="button" onclick="applyFilters()">Применить фильтры</button>
+            </form>
+        </div>
         {% endblock %}
 
         <div class="main-content">
@@ -37,6 +57,102 @@
     </div>
 
     <script>
+        let selectedEntity = null;
+
+        // Загрузка фильтров для выбранной сущности
+        function loadFiltersForEntity() {
+            const select = document.getElementById('entity-select');
+            selectedEntity = select.value;
+
+            if (!selectedEntity) {
+                document.getElementById('filters-container').innerHTML = '';
+                return;
+            }
+
+            fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(selectedEntity)}`)
+                .then(res => res.json())
+                .then(data => {
+                    populateFilters(data);
+                });
+        }
+
+        // Заполнение формы фильтрами
+        function populateFilters(characteristics) {
+            const container = document.getElementById('filters-container');
+            container.innerHTML = ''; // Очищаем контейнер
+
+            for (const charName of characteristics) {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label>${charName}:</label>
+                    <input type="text" placeholder="Введите значение" data-char="${charName}">
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        // Применение фильтров
+        function applyFilters() {
+            if (!selectedEntity) {
+                alert('Пожалуйста, выберите сущность.');
+                return;
+            }
+
+            const inputs = document.querySelectorAll('#filters-container input');
+            const filters = {};
+
+            inputs.forEach(input => {
+                const charName = input.getAttribute('data-char');
+                const value = input.value.trim();
+                if (value) {
+                    filters[charName] = value;
+                }
+            });
+
+            if (Object.keys(filters).length === 0) {
+                alert('Пожалуйста, укажите хотя бы один фильтр.');
+                return;
+            }
+
+            fetch('/filter_by_params', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ entity: selectedEntity, filters })
+            })
+            .then(res => res.json())
+            .then(data => {
+                displayFilteredResults(data);
+            });
+        }
+
+        // Отображение отфильтрованных результатов
+        function displayFilteredResults(data) {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+
+            if (data.length === 0) {
+                resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+                return;
+            }
+
+            let html = '<h3>Результаты фильтрации:</h3>';
+            data.forEach(item => {
+                html += `
+                    <div class="search-result">
+                        <p><strong>${item.entity}</strong></p>
+                        <p>Объект: ${item.object}</p>
+                        <p>Характеристика: ${item.characteristic}</p>
+                        <p>Значение: ${item.value}</p>
+                    </div>
+                `;
+            });
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+        }
+
         function toggleCategory(element) {
             element.parentElement.classList.toggle('active');
         }
@@ -45,6 +161,5 @@
             window.location.href = `/filter?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
         }
     </script>
-    {% block scripts %}{% endblock %}
 </body>
 </html>
