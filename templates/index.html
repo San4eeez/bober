@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="search-box">
-    <input type="text" id="search-input" placeholder="Поиск по характеристикам...">
+    <input type="text" id="search-input" placeholder="Поиск">
 </div>
 
 <div id="search-results"></div>
@@ -88,11 +88,8 @@
                                 <div class="search-result">
                                     <p><strong>${highlight(item.entity, query)}</strong></p>
                                     <p>Объект: ${highlight(item.object, query)}</p>
-                                    <p>Характеристика: ${highlight(item.characteristic, query)}</p>
-                                    <p>Значение: ${highlight(item.value, query)}</p>
                                 </div>
                             `;
-
                         });
                         resultsDiv.innerHTML = html;
                         resultsDiv.style.display = 'block';

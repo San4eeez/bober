@@ -31,7 +31,6 @@ def index():
         GROUP BY c.name, sc.name
         ORDER BY c.name, sc.name
     """)
-
     categories = {}
     for category, subcategory, count in cur.fetchall():
         if category not in categories:
@@ -69,7 +68,6 @@ def filter_entities():
         GROUP BY c.name, sc.name
         ORDER BY c.name, sc.name
     """)
-
     categories_data = {}
     for cat, subcat, count in cur.fetchall():
         if cat not in categories_data:
@@ -89,8 +87,8 @@ def filter_entities():
         JOIN categories c ON sc.category_id = c.id
         WHERE c.name = %s AND sc.name = %s
     """, (category, subcategory))
-
     entity_ids = [row[0] for row in cur.fetchall()]
+
     all_entities = get_all_data()
     filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
 
@@ -111,27 +109,19 @@ def search():
         cur.execute("""
             SELECT 
                 e.name AS entity,
-                o.name AS object,
-                ec.name AS characteristic,
-                ov.value AS value,
-                ec.unit AS unit
-            FROM object_values ov
-            JOIN objects o ON ov.object_id = o.id
+                o.name AS object
+            FROM objects o
             JOIN entities e ON o.entity_id = e.id
-            JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
-            WHERE ov.value ILIKE %s
-            ORDER BY e.name, o.name, ec.name;
+            WHERE o.name ILIKE %s
+            ORDER BY e.name, o.name;
         """, (f"%{query}%",))
 
         results = []
         for row in cur.fetchall():
-            entity, object_name, characteristic, value, unit = row
-            display_value = f"{value} {unit}" if unit else value
+            entity, object_name = row
             results.append({
                 'entity': entity,
-                'object': object_name,
-                'characteristic': characteristic,
-                'value': display_value
+                'object': object_name
             })
 
         return jsonify(results)
@@ -208,7 +198,6 @@ def filter_by_params():
             WHERE e.name = %s
         """
         params = [entity_name]
-
         for char_name, value in filters.items():
             query += " AND ec.name = %s AND ov.value = %s"
             params.extend([char_name, value])
@@ -227,7 +216,6 @@ def filter_by_params():
             })
 
         return jsonify(filtered_data)
-
     finally:
         cur.close()
         conn.close()
@@ -245,7 +233,6 @@ def get_all_data():
             LEFT JOIN categories c ON sc.category_id = c.id
             ORDER BY e.name
         """)
-
         entities = {}
         for row in cur.fetchall():
             entity_id, entity_name, category, subcategory = row
@@ -264,7 +251,6 @@ def get_all_data():
             FROM entity_characteristics ec
             ORDER BY ec.entity_id, ec.name
         """)
-
         characteristics = {}
         for row in cur.fetchall():
             char_id, entity_id, char_name, data_type, unit = row
@@ -284,7 +270,6 @@ def get_all_data():
             FROM objects o
             ORDER BY o.entity_id, o.name
         """)
-
         objects = {}
         for row in cur.fetchall():
             obj_id, entity_id, obj_name = row
@@ -303,7 +288,6 @@ def get_all_data():
             FROM object_values ov
             ORDER BY ov.object_id, ov.characteristic_id
         """)
-
         for row in cur.fetchall():
             obj_id, char_id, value = row
             if obj_id in objects and char_id in characteristics:
@@ -324,7 +308,6 @@ def get_all_data():
             result.append(entity)
 
         return result
-
     finally:
         cur.close()
         conn.close()
