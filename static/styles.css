@@ -281,6 +281,7 @@ body {
     border-radius: 2px;
 }
 
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .container {
