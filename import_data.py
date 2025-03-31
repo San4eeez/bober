@@ -340,7 +340,7 @@ def init_database():
             CREATE TABLE subcategories (
                 id SERIAL PRIMARY KEY,
                 category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-                name VARCHAR(255) NOT NULL,
+                name text NOT NULL,
                 UNIQUE(category_id, name)
             )
         """)
@@ -360,7 +360,7 @@ def init_database():
             CREATE TABLE entity_characteristics (
                 id SERIAL PRIMARY KEY,
                 entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-                name VARCHAR(255) NOT NULL,
+                name text NOT NULL,
                 data_type VARCHAR(50),
                 unit VARCHAR(50),
                 UNIQUE(entity_id, name)
@@ -398,7 +398,7 @@ if __name__ == '__main__':
     init_database()
 
     # 2. Импорт данных из Excel
-    file_path = 'part.xlsx'  # Укажите путь к вашему файлу
+    file_path = 'doc.xlsx'  # Укажите путь к вашему файлу
     print(f"\nАнализ файла {file_path}...")
     data = parse_excel(file_path)
 
