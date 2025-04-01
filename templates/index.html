@@ -27,6 +27,30 @@
                 {% if char.unit %}
                 <span class="unit-badge">{{ char.unit }}</span>
                 {% endif %}
+                <!-- Отображение ОКПД2 -->
+                {% if char.okpd2 %}
+                <p><strong>ОКПД2:</strong> {{ char.okpd2 }}</p>
+                {% endif %}
+                <!-- Отображение Код КТРУ с гиперссылкой -->
+                {% if char.ktru_code %}
+                <p><strong>Код КТРУ:</strong>
+                    {% if char.links|selectattr('name', 'equalto', 'ktru_link')|list %}
+                        <a href="{{ char.links|selectattr('name', 'equalto', 'ktru_link')|first.url }}" target="_blank">{{ char.ktru_code }}</a>
+                    {% else %}
+                        {{ char.ktru_code }}
+                    {% endif %}
+                </p>
+                {% endif %}
+                <!-- Отображение Код ККН с гиперссылкой -->
+                {% if char.kkn_code %}
+                <p><strong>Код ККН:</strong>
+                    {% if char.links|selectattr('name', 'equalto', 'kkn_link')|list %}
+                        <a href="{{ char.links|selectattr('name', 'equalto', 'kkn_link')|first.url }}" target="_blank">{{ char.kkn_code }}</a>
+                    {% else %}
+                        {{ char.kkn_code }}
+                    {% endif %}
+                </p>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -52,7 +76,16 @@
                                 {% elif value.startswith('≤') %}
                                     <span class="range-value">≤ {{ value[1:] }}</span>
                                 {% else %}
-                                    {{ value }}
+                                    <!-- Обработка ссылок для "Код КТРУ" и "Код ККН" -->
+                                    {% if char.name in ['Код КТРУ', 'Код ККН'] %}
+                                        {% if char.links|selectattr('name', 'equalto', char.name.lower() + '_link')|list %}
+                                            <a href="{{ char.links|selectattr('name', 'equalto', char.name.lower() + '_link')|first.url }}" target="_blank">{{ value }}</a>
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    {% else %}
+                                        {{ value }}
+                                    {% endif %}
                                 {% endif %}
                                 {% if obj.characteristics_info[char.id|string].unit %}
                                     <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
