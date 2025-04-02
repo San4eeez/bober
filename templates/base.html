@@ -52,7 +52,40 @@
         {% endblock %}
 
         <div class="main-content">
-            {% block content %}{% endblock %}
+            {% block content %}
+            <div class="entities-list">
+    <h2>Сущности</h2>
+    {% for entity in entities %}
+    <div class="entity-item">
+        <h3>{{ entity.name }}</h3>
+        <p><strong>Категория:</strong> {{ entity.category }}</p>
+        <p><strong>Подкатегория:</strong> {{ entity.subcategory }}</p>
+        <h4>Объекты:</h4>
+        <ul>
+            {% for obj in entity.objects %}
+            <li>
+                <strong>{{ obj.name }}</strong>
+                <ul>
+                    {% for char_id, char_info in obj.characteristics_info.items() %}
+                    <li>
+                        <strong>{{ char_info.name }}:</strong>
+                        <div class="property-value">
+                            {% if char_info.value.startswith('http') %}
+                                <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
+                            {% else %}
+                                {{ char_info.value }}
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+</div>
+            {% endblock %}
         </div>
     </div>
 

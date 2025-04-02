@@ -290,6 +290,11 @@ body {
     border-radius: 4px;
 }
 
+a {
+    color: blue;
+    text-decoration: underline;
+}
+
 
 /* Адаптивность */
 @media (max-width: 768px) {
@@ -312,4 +317,6 @@ body {
         margin-bottom: 5px;
         padding-right: 0;
     }
+
+
 }

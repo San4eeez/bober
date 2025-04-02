@@ -66,34 +66,28 @@
                     <div class="property">
                         <div class="property-name">{{ char.name }}</div>
                         <div class="property-value">
-                            {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
-                                {% set value = obj.characteristics_info[char.id|string].value %}
-                                {% if '...' in value %}
-                                    {% set parts = value.split('...') %}
-                                    <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
-                                {% elif value.startswith('≥') %}
-                                    <span class="range-value">≥ {{ value[1:] }}</span>
-                                {% elif value.startswith('≤') %}
-                                    <span class="range-value">≤ {{ value[1:] }}</span>
-                                {% else %}
-                                    <!-- Обработка ссылок для "Код КТРУ" и "Код ККН" -->
-                                    {% if char.name in ['Код КТРУ', 'Код ККН'] %}
-                                        {% if char.links|selectattr('name', 'equalto', char.name.lower() + '_link')|list %}
-                                            <a href="{{ char.links|selectattr('name', 'equalto', char.name.lower() + '_link')|first.url }}" target="_blank">{{ value }}</a>
-                                        {% else %}
-                                            {{ value }}
-                                        {% endif %}
-                                    {% else %}
-                                        {{ value }}
-                                    {% endif %}
-                                {% endif %}
-                                {% if obj.characteristics_info[char.id|string].unit %}
-                                    <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="empty-value">—</span>
-                            {% endif %}
-                        </div>
+    {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
+        {% set value = obj.characteristics_info[char.id|string].value %}
+        {% if '...' in value %}
+            {% set parts = value.split('...') %}
+            <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
+        {% elif value.startswith('≥') %}
+            <span class="range-value">≥ {{ value[1:] }}</span>
+        {% elif value.startswith('≤') %}
+            <span class="range-value">≤ {{ value[1:] }}</span>
+        {% elif value.startswith('http') %}
+            <!-- Преобразование текстовой ссылки в гиперссылку -->
+            <a href="{{ value }}" target="_blank">{{ value }}</a>
+        {% else %}
+            {{ value }}
+        {% endif %}
+        {% if obj.characteristics_info[char.id|string].unit %}
+            <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
+        {% endif %}
+    {% else %}
+        <span class="empty-value">—</span>
+    {% endif %}
+</div>
                     </div>
                     {% endfor %}
                 </div>
