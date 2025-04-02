@@ -307,7 +307,7 @@ if __name__ == '__main__':
     print("Инициализация структуры БД...")
     init_database()
     # 2. Импорт данных из Excel
-    file_path = 'part.xlsx'  # Укажите путь к вашему файлу
+    file_path = 'doc.xlsx'  # Укажите путь к вашему файлу
     print(f"\nАнализ файла {file_path}...")
     data = parse_excel(file_path)
     # Вывод информации о данных перед импортом

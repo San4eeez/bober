@@ -30,17 +30,6 @@
             {% endfor %}
         </div>
 
-        <!-- Выбор сущности -->
-        <div class="entity-selector">
-            <h3>Выберите сущность</h3>
-            <select id="entity-select" onchange="loadFiltersForEntity()">
-                <option value="">-- Выберите сущность --</option>
-                {% for entity in entities %}
-                <option value="{{ entity.name }}">{{ entity.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
         <!-- Блок фильтров -->
         <div class="filters-section">
             <h3>Фильтры</h3>
@@ -54,62 +43,58 @@
         <div class="main-content">
             {% block content %}
             <div class="entities-list">
-    <h2>Сущности</h2>
-    {% for entity in entities %}
-    <div class="entity-item">
-        <h3>{{ entity.name }}</h3>
-        <p><strong>Категория:</strong> {{ entity.category }}</p>
-        <p><strong>Подкатегория:</strong> {{ entity.subcategory }}</p>
-        <h4>Объекты:</h4>
-        <ul>
-            {% for obj in entity.objects %}
-            <li>
-                <strong>{{ obj.name }}</strong>
-                <ul>
-                    {% for char_id, char_info in obj.characteristics_info.items() %}
-                    <li>
-                        <strong>{{ char_info.name }}:</strong>
-                        <div class="property-value">
-                            {% if char_info.value.startswith('http') %}
-                                <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
-                            {% else %}
-                                {{ char_info.value }}
-                            {% endif %}
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-    {% endfor %}
-</div>
+                <h2>Сущности</h2>
+                {% for entity in entities %}
+                <div class="entity-item">
+                    <h3>{{ entity.name }}</h3>
+                    <p><strong>Категория:</strong> {{ entity.category }}</p>
+                    <p><strong>Подкатегория:</strong> {{ entity.subcategory }}</p>
+                    <h4>Объекты:</h4>
+                    <ul>
+                        {% for obj in entity.objects %}
+                        <li>
+                            <strong>{{ obj.name }}</strong>
+                            <ul>
+                                {% for char_id, char_info in obj.characteristics_info.items() %}
+                                <li>
+                                    <strong>{{ char_info.name }}:</strong>
+                                    <div class="property-value">
+                                        {% if char_info.value.startswith('http') %}
+                                            <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
+                                        {% else %}
+                                            {{ char_info.value }}
+                                        {% endif %}
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endfor %}
+            </div>
             {% endblock %}
         </div>
     </div>
 
     <script>
-        let selectedEntity = null;
-
-        // Загрузка фильтров для выбранной сущности
-        function loadFiltersForEntity() {
-            const select = document.getElementById('entity-select');
-            selectedEntity = select.value;
-
-            if (!selectedEntity) {
-                document.getElementById('filters-container').innerHTML = '';
-                return;
+        // Загрузка фильтров для единственной сущности при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function () {
+            const selectedEntity = "{{ entities[0].name }}"; // Имя единственной сущности
+            if (selectedEntity) {
+                loadFiltersForEntity(selectedEntity);
             }
+        });
 
-            fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(selectedEntity)}`)
+        function loadFiltersForEntity(entityName) {
+            fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(entityName)}`)
                 .then(res => res.json())
                 .then(characteristics => {
                     populateFilters(characteristics);
                 });
         }
 
-        // Заполнение формы фильтрами
         function populateFilters(characteristics) {
             const container = document.getElementById('filters-container');
             container.innerHTML = ''; // Очищаем контейнер
@@ -125,7 +110,7 @@
                 container.appendChild(div);
 
                 // Загружаем уникальные значения для характеристики
-                fetch(`/get_characteristic_values?entity_name=${encodeURIComponent(selectedEntity)}&characteristic_name=${encodeURIComponent(charName)}`)
+                fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name }}")}&characteristic_name=${encodeURIComponent(charName)}`)
                     .then(res => res.json())
                     .then(values => {
                         const select = div.querySelector('select');
@@ -141,8 +126,9 @@
 
         // Применение фильтров
         function applyFilters() {
+            const selectedEntity = "{{ entities[0].name }}";
             if (!selectedEntity) {
-                alert('Пожалуйста, выберите сущность.');
+                alert('Сущность не найдена.');
                 return;
             }
 
@@ -175,7 +161,6 @@
             });
         }
 
-        // Отображение отфильтрованных результатов
         function displayFilteredResults(data) {
             const resultsDiv = document.getElementById('search-results');
             resultsDiv.innerHTML = '';

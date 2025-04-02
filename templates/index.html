@@ -36,6 +36,8 @@
                 <p><strong>Код КТРУ:</strong>
                     {% if char.links|selectattr('name', 'equalto', 'ktru_link')|list %}
                         <a href="{{ char.links|selectattr('name', 'equalto', 'ktru_link')|first.url }}" target="_blank">{{ char.ktru_code }}</a>
+                    {% elif char.ktru_code.startswith('http') %}
+                        <a href="{{ char.ktru_code }}" target="_blank">{{ char.ktru_code }}</a>
                     {% else %}
                         {{ char.ktru_code }}
                     {% endif %}
@@ -46,6 +48,8 @@
                 <p><strong>Код ККН:</strong>
                     {% if char.links|selectattr('name', 'equalto', 'kkn_link')|list %}
                         <a href="{{ char.links|selectattr('name', 'equalto', 'kkn_link')|first.url }}" target="_blank">{{ char.kkn_code }}</a>
+                    {% elif char.kkn_code.startswith('http') %}
+                        <a href="{{ char.kkn_code }}" target="_blank">{{ char.kkn_code }}</a>
                     {% else %}
                         {{ char.kkn_code }}
                     {% endif %}
@@ -66,28 +70,27 @@
                     <div class="property">
                         <div class="property-name">{{ char.name }}</div>
                         <div class="property-value">
-    {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
-        {% set value = obj.characteristics_info[char.id|string].value %}
-        {% if '...' in value %}
-            {% set parts = value.split('...') %}
-            <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
-        {% elif value.startswith('≥') %}
-            <span class="range-value">≥ {{ value[1:] }}</span>
-        {% elif value.startswith('≤') %}
-            <span class="range-value">≤ {{ value[1:] }}</span>
-        {% elif value.startswith('http') %}
-            <!-- Преобразование текстовой ссылки в гиперссылку -->
-            <a href="{{ value }}" target="_blank">{{ value }}</a>
-        {% else %}
-            {{ value }}
-        {% endif %}
-        {% if obj.characteristics_info[char.id|string].unit %}
-            <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
-        {% endif %}
-    {% else %}
-        <span class="empty-value">—</span>
-    {% endif %}
-</div>
+                            {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
+                                {% set value = obj.characteristics_info[char.id|string].value %}
+                                {% if '...' in value %}
+                                    {% set parts = value.split('...') %}
+                                    <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
+                                {% elif value.startswith('≥') %}
+                                    <span class="range-value">≥ {{ value[1:] }}</span>
+                                {% elif value.startswith('≤') %}
+                                    <span class="range-value">≤ {{ value[1:] }}</span>
+                                {% elif value.startswith('http') %}
+                                    <a href="{{ value }}" target="_blank">{{ value }}</a>
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                                {% if obj.characteristics_info[char.id|string].unit %}
+                                    <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="empty-value">—</span>
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -99,7 +102,7 @@
 </div>
 
 <script>
-    document.getElementById('search-input').addEventListener('input', function() {
+    document.getElementById('search-input').addEventListener('input', function () {
         const query = this.value.trim();
         const resultsDiv = document.getElementById('search-results');
         const allDataDiv = document.getElementById('all-data');
@@ -137,6 +140,113 @@
         if (!query || !text) return text;
         const re = new RegExp(query, 'gi');
         return text.toString().replace(re, match => `<span class="highlight">${match}</span>`);
+    }
+
+    // Загрузка фильтров для единственной сущности при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectedEntity = "{{ entities[0].name }}"; // Имя единственной сущности
+        if (selectedEntity) {
+            loadFiltersForEntity(selectedEntity);
+        }
+    });
+
+    function loadFiltersForEntity(entityName) {
+        fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(entityName)}`)
+            .then(res => res.json())
+            .then(characteristics => {
+                populateFilters(characteristics);
+            });
+    }
+
+    function populateFilters(characteristics) {
+        const container = document.getElementById('filters-container');
+        container.innerHTML = ''; // Очищаем контейнер
+
+        characteristics.forEach(charName => {
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label>${charName}:</label>
+                <select data-char="${charName}">
+                    <option value="">-- Выберите значение --</option>
+                </select>
+            `;
+            container.appendChild(div);
+
+            // Загружаем уникальные значения для характеристики
+            fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name }}")}&characteristic_name=${encodeURIComponent(charName)}`)
+                .then(res => res.json())
+                .then(values => {
+                    const select = div.querySelector('select');
+                    values.forEach(value => {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = value;
+                        select.appendChild(option);
+                    });
+                });
+        });
+    }
+
+    // Применение фильтров
+    function applyFilters() {
+        const selectedEntity = "{{ entities[0].name }}";
+        if (!selectedEntity) {
+            alert('Сущность не найдена.');
+            return;
+        }
+
+        const selects = document.querySelectorAll('#filters-container select');
+        const filters = {};
+
+        selects.forEach(select => {
+            const charName = select.getAttribute('data-char');
+            const value = select.value.trim();
+            if (value) {
+                filters[charName] = value;
+            }
+        });
+
+        if (Object.keys(filters).length === 0) {
+            alert('Пожалуйста, укажите хотя бы один фильтр.');
+            return;
+        }
+
+        fetch('/filter_by_params', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ entity: selectedEntity, filters })
+        })
+            .then(res => res.json())
+            .then(data => {
+                displayFilteredResults(data);
+            });
+    }
+
+    function displayFilteredResults(data) {
+        const resultsDiv = document.getElementById('search-results');
+        resultsDiv.innerHTML = '';
+
+        if (data.length === 0) {
+            resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+            return;
+        }
+
+        let html = '<h3>Результаты фильтрации:</h3>';
+        data.forEach(item => {
+            html += `
+                <div class="search-result">
+                    <p><strong>${item.entity}</strong></p>
+                    <p>Объект: ${item.object}</p>
+                    <p>Характеристика: ${item.characteristic}</p>
+                    <p>Значение: ${item.value}</p>
+                </div>
+            `;
+        });
+
+        resultsDiv.innerHTML = html;
+        resultsDiv.style.display = 'block';
     }
 </script>
 {% endblock %}

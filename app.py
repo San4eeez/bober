@@ -94,22 +94,68 @@ def filter_entities():
             })
             categories_data[cat]['count'] += count
 
-    # Получаем отфильтрованные сущности
+    # Получаем единственную сущность для выбранной категории и подкатегории
     cur.execute("""
-        SELECT e.id
+        SELECT e.id, e.name
         FROM entities e
         JOIN subcategories sc ON e.subcategory_id = sc.id
         JOIN categories c ON sc.category_id = c.id
         WHERE c.name = %s AND sc.name = %s
     """, (category, subcategory))
-    entity_ids = [row[0] for row in cur.fetchall()]
-    all_entities = get_all_data()
-    filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
+    entity_data = cur.fetchone()
+
+    if not entity_data:
+        return render_template('index.html',
+                               categories=[{'name': k, **v} for k, v in categories_data.items()],
+                               entities=[])
+
+    entity_id, entity_name = entity_data
+
+    # Получаем характеристики для этой сущности
+    cur.execute("""
+        SELECT ec.id, ec.name, ec.data_type, ec.unit
+        FROM entity_characteristics ec
+        WHERE ec.entity_id = %s
+    """, (entity_id,))
+    characteristics = [{'id': row[0], 'name': row[1], 'data_type': row[2], 'unit': row[3]} for row in cur.fetchall()]
+
+    # Получаем объекты для этой сущности
+    cur.execute("""
+        SELECT o.id, o.name
+        FROM objects o
+        WHERE o.entity_id = %s
+    """, (entity_id,))
+    objects = [{'id': row[0], 'name': row[1]} for row in cur.fetchall()]
+
+    # Получаем значения характеристик для объектов
+    object_characteristics = {}
+    for obj in objects:
+        cur.execute("""
+            SELECT oc.characteristic_id, oc.value, ec.unit
+            FROM object_values oc
+            JOIN entity_characteristics ec ON oc.characteristic_id = ec.id
+            WHERE oc.object_id = %s
+        """, (obj['id'],))
+        obj_char_info = {str(row[0]): {'value': row[1], 'unit': row[2]} for row in cur.fetchall()}
+        object_characteristics[obj['id']] = obj_char_info
+
+    # Формируем полные данные для шаблона
+    entities = [{
+        'id': entity_id,
+        'name': entity_name,
+        'characteristics': characteristics,
+        'objects': [
+            {
+                'id': obj['id'],
+                'name': obj['name'],
+                'characteristics_info': object_characteristics.get(obj['id'], {})
+            } for obj in objects
+        ]
+    }]
 
     return render_template('index.html',
                            categories=[{'name': k, **v} for k, v in categories_data.items()],
-                           entities=filtered_entities)
-
+                           entities=entities)
 
 def filter_entities_by_default(category, subcategory):
     """Функция для фильтрации по первой категории и подкатегории"""
