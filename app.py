@@ -94,68 +94,22 @@ def filter_entities():
             })
             categories_data[cat]['count'] += count
 
-    # Получаем единственную сущность для выбранной категории и подкатегории
+    # Получаем отфильтрованные сущности
     cur.execute("""
-        SELECT e.id, e.name
+        SELECT e.id
         FROM entities e
         JOIN subcategories sc ON e.subcategory_id = sc.id
         JOIN categories c ON sc.category_id = c.id
         WHERE c.name = %s AND sc.name = %s
     """, (category, subcategory))
-    entity_data = cur.fetchone()
+    entity_ids = [row[0] for row in cur.fetchall()]
 
-    if not entity_data:
-        return render_template('index.html',
-                               categories=[{'name': k, **v} for k, v in categories_data.items()],
-                               entities=[])
-
-    entity_id, entity_name = entity_data
-
-    # Получаем характеристики для этой сущности
-    cur.execute("""
-        SELECT ec.id, ec.name, ec.data_type, ec.unit
-        FROM entity_characteristics ec
-        WHERE ec.entity_id = %s
-    """, (entity_id,))
-    characteristics = [{'id': row[0], 'name': row[1], 'data_type': row[2], 'unit': row[3]} for row in cur.fetchall()]
-
-    # Получаем объекты для этой сущности
-    cur.execute("""
-        SELECT o.id, o.name
-        FROM objects o
-        WHERE o.entity_id = %s
-    """, (entity_id,))
-    objects = [{'id': row[0], 'name': row[1]} for row in cur.fetchall()]
-
-    # Получаем значения характеристик для объектов
-    object_characteristics = {}
-    for obj in objects:
-        cur.execute("""
-            SELECT oc.characteristic_id, oc.value, ec.unit
-            FROM object_values oc
-            JOIN entity_characteristics ec ON oc.characteristic_id = ec.id
-            WHERE oc.object_id = %s
-        """, (obj['id'],))
-        obj_char_info = {str(row[0]): {'value': row[1], 'unit': row[2]} for row in cur.fetchall()}
-        object_characteristics[obj['id']] = obj_char_info
-
-    # Формируем полные данные для шаблона
-    entities = [{
-        'id': entity_id,
-        'name': entity_name,
-        'characteristics': characteristics,
-        'objects': [
-            {
-                'id': obj['id'],
-                'name': obj['name'],
-                'characteristics_info': object_characteristics.get(obj['id'], {})
-            } for obj in objects
-        ]
-    }]
+    all_entities = get_all_data()
+    filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
 
     return render_template('index.html',
                            categories=[{'name': k, **v} for k, v in categories_data.items()],
-                           entities=entities)
+                           entities=filtered_entities)
 
 def filter_entities_by_default(category, subcategory):
     """Функция для фильтрации по первой категории и подкатегории"""
@@ -206,26 +160,67 @@ def search():
     query = request.args.get('q', '').strip()
     if not query:
         return jsonify([])
+
     conn = get_db_connection()
     cur = conn.cursor()
+
     try:
         cur.execute("""
             SELECT 
-                e.name AS entity,
-                o.name AS object
+                e.id AS entity_id,
+                e.name AS entity_name,
+                o.id AS object_id,
+                o.name AS object_name,
+                ec.id AS characteristic_id,
+                ec.name AS characteristic_name,
+                ov.value AS characteristic_value
             FROM objects o
             JOIN entities e ON o.entity_id = e.id
-            WHERE o.name ILIKE %s
+            LEFT JOIN object_values ov ON ov.object_id = o.id
+            LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            WHERE o.name ILIKE %s OR e.name ILIKE %s
             ORDER BY e.name, o.name;
-        """, (f"%{query}%",))
-        results = []
-        for row in cur.fetchall():
-            entity, object_name = row
-            results.append({
-                'entity': entity,
-                'object': object_name
-            })
-        return jsonify(results)
+        """, (f"%{query}%", f"%{query}%"))
+
+        results = cur.fetchall()
+
+        # Группируем данные по сущностям и объектам
+        grouped_data = {}
+        for row in results:
+            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value = row
+
+            if entity_id not in grouped_data:
+                grouped_data[entity_id] = {
+                    'id': entity_id,
+                    'name': entity_name,
+                    'objects': {}
+                }
+
+            if object_id not in grouped_data[entity_id]['objects']:
+                grouped_data[entity_id]['objects'][object_id] = {
+                    'id': object_id,
+                    'name': object_name,
+                    'characteristics_info': {}
+                }
+
+            if char_id and char_name and char_value:
+                grouped_data[entity_id]['objects'][object_id]['characteristics_info'][char_id] = {
+                    'name': char_name,
+                    'value': char_value
+                }
+
+        # Преобразуем данные в список
+        entities = []
+        for entity_data in grouped_data.values():
+            entity = {
+                'id': entity_data['id'],
+                'name': entity_data['name'],
+                'objects': list(entity_data['objects'].values())
+            }
+            entities.append(entity)
+
+        return jsonify(entities)
+
     finally:
         cur.close()
         conn.close()
@@ -281,13 +276,17 @@ def filter_by_params():
     data = request.json
     entity_name = data.get('entity')
     filters = data.get('filters')
+
     if not entity_name or not filters:
         return jsonify([])
+
     conn = get_db_connection()
     cur = conn.cursor()
+
     try:
+        # 1. Получаем ID объектов, которые соответствуют фильтрам
         query = """
-            SELECT e.name AS entity, o.name AS object, ec.name AS characteristic, ov.value
+            SELECT DISTINCT o.id
             FROM object_values ov
             JOIN objects o ON ov.object_id = o.id
             JOIN entities e ON o.entity_id = e.id
@@ -295,25 +294,45 @@ def filter_by_params():
             WHERE e.name = %s
         """
         params = [entity_name]
+
         for char_name, value in filters.items():
             query += " AND ec.name = %s AND ov.value = %s"
             params.extend([char_name, value])
+
         cur.execute(query, params)
-        results = cur.fetchall()
-        filtered_data = []
-        for row in results:
-            entity, object_name, characteristic, value = row
-            filtered_data.append({
-                'entity': entity,
-                'object': object_name,
-                'characteristic': characteristic,
-                'value': value
-            })
-        return jsonify(filtered_data)
+        filtered_object_ids = [row[0] for row in cur.fetchall()]
+
+        # Если нет подходящих объектов, возвращаем пустой список
+        if not filtered_object_ids:
+            return jsonify([])
+
+        # 2. Получаем полные данные для отфильтрованных объектов
+        all_entities = get_all_data()
+        filtered_entities = []
+
+        for entity in all_entities:
+            if entity['name'] == entity_name:
+                # Фильтруем объекты по их ID
+                filtered_objects = [
+                    obj for obj in entity['objects']
+                    if obj['id'] in filtered_object_ids
+                ]
+                if filtered_objects:
+                    filtered_entity = {
+                        'id': entity['id'],
+                        'name': entity['name'],
+                        'category': entity['category'],
+                        'subcategory': entity['subcategory'],
+                        'characteristics': entity['characteristics'],
+                        'objects': filtered_objects
+                    }
+                    filtered_entities.append(filtered_entity)
+
+        return jsonify(filtered_entities)
+
     finally:
         cur.close()
         conn.close()
-
 
 def get_all_data():
     conn = get_db_connection()

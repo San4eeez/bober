@@ -5,8 +5,6 @@
     <input type="text" id="search-input" placeholder="Поиск по названиям объектов...">
 </div>
 
-<div id="search-results"></div>
-
 <div id="all-data">
     {% for entity in entities %}
     <div class="entity">
@@ -27,34 +25,6 @@
                 {% if char.unit %}
                 <span class="unit-badge">{{ char.unit }}</span>
                 {% endif %}
-                <!-- Отображение ОКПД2 -->
-                {% if char.okpd2 %}
-                <p><strong>ОКПД2:</strong> {{ char.okpd2 }}</p>
-                {% endif %}
-                <!-- Отображение Код КТРУ с гиперссылкой -->
-                {% if char.ktru_code %}
-                <p><strong>Код КТРУ:</strong>
-                    {% if char.links|selectattr('name', 'equalto', 'ktru_link')|list %}
-                        <a href="{{ char.links|selectattr('name', 'equalto', 'ktru_link')|first.url }}" target="_blank">{{ char.ktru_code }}</a>
-                    {% elif char.ktru_code.startswith('http') %}
-                        <a href="{{ char.ktru_code }}" target="_blank">{{ char.ktru_code }}</a>
-                    {% else %}
-                        {{ char.ktru_code }}
-                    {% endif %}
-                </p>
-                {% endif %}
-                <!-- Отображение Код ККН с гиперссылкой -->
-                {% if char.kkn_code %}
-                <p><strong>Код ККН:</strong>
-                    {% if char.links|selectattr('name', 'equalto', 'kkn_link')|list %}
-                        <a href="{{ char.links|selectattr('name', 'equalto', 'kkn_link')|first.url }}" target="_blank">{{ char.kkn_code }}</a>
-                    {% elif char.kkn_code.startswith('http') %}
-                        <a href="{{ char.kkn_code }}" target="_blank">{{ char.kkn_code }}</a>
-                    {% else %}
-                        {{ char.kkn_code }}
-                    {% endif %}
-                </p>
-                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -66,29 +36,17 @@
                     <h3 class="object-name">{{ obj.name }}</h3>
                 </div>
                 <div class="properties-list">
-                    {% for char in entity.characteristics %}
+                    {% for char_id, char_info in obj.characteristics_info.items() %}
                     <div class="property">
-                        <div class="property-name">{{ char.name }}</div>
+                        <div class="property-name">{{ char_info.name }}</div>
                         <div class="property-value">
-                            {% if obj.characteristics_info and (char.id|string) in obj.characteristics_info %}
-                                {% set value = obj.characteristics_info[char.id|string].value %}
-                                {% if '...' in value %}
-                                    {% set parts = value.split('...') %}
-                                    <span class="range-value">{{ parts[0] }} — {{ parts[1] }}</span>
-                                {% elif value.startswith('≥') %}
-                                    <span class="range-value">≥ {{ value[1:] }}</span>
-                                {% elif value.startswith('≤') %}
-                                    <span class="range-value">≤ {{ value[1:] }}</span>
-                                {% elif value.startswith('http') %}
-                                    <a href="{{ value }}" target="_blank">{{ value }}</a>
-                                {% else %}
-                                    {{ value }}
-                                {% endif %}
-                                {% if obj.characteristics_info[char.id|string].unit %}
-                                    <span class="unit">{{ obj.characteristics_info[char.id|string].unit }}</span>
-                                {% endif %}
+                            {% if char_info.value.startswith('http') %}
+                                <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
                             {% else %}
-                                <span class="empty-value">—</span>
+                                {{ char_info.value }}
+                            {% endif %}
+                            {% if char_info.unit %}
+                                <span class="unit">{{ char_info.unit }}</span>
                             {% endif %}
                         </div>
                     </div>
@@ -102,44 +60,77 @@
 </div>
 
 <script>
+    // Поиск
     document.getElementById('search-input').addEventListener('input', function () {
         const query = this.value.trim();
-        const resultsDiv = document.getElementById('search-results');
-        const allDataDiv = document.getElementById('all-data');
-
         if (query.length > 0) {
             fetch(`/search?q=${encodeURIComponent(query)}`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data.length > 0) {
-                        let html = '<h3>Результаты поиска:</h3>';
-                        data.forEach(item => {
-                            html += `
-                                <div class="search-result">
-                                    <p><strong>${highlight(item.entity, query)}</strong></p>
-                                    <p>Объект: ${highlight(item.object, query)}</p>
-                                </div>
-                            `;
-                        });
-                        resultsDiv.innerHTML = html;
-                        resultsDiv.style.display = 'block';
-                        allDataDiv.style.display = 'none';
-                    } else {
-                        resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
-                        resultsDiv.style.display = 'block';
-                        allDataDiv.style.display = 'none';
-                    }
+                    updatePageWithFilteredData(data);
                 });
         } else {
-            resultsDiv.style.display = 'none';
-            allDataDiv.style.display = 'block';
+            // Если запрос пустой, показываем все данные
+            location.reload();
         }
     });
 
-    function highlight(text, query) {
-        if (!query || !text) return text;
-        const re = new RegExp(query, 'gi');
-        return text.toString().replace(re, match => `<span class="highlight">${match}</span>`);
+    // Обновление DOM с отфильтрованными данными
+    function updatePageWithFilteredData(filteredEntities) {
+        const allDataDiv = document.getElementById('all-data');
+        allDataDiv.innerHTML = ''; // Очищаем текущие данные
+
+        if (filteredEntities.length === 0) {
+            allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
+            return;
+        }
+
+        filteredEntities.forEach(entity => {
+            const entityDiv = document.createElement('div');
+            entityDiv.className = 'entity';
+
+            // Заголовок сущности
+            entityDiv.innerHTML = `
+                <div class="entity-header">
+                    <h2 class="entity-name">${entity.name}</h2>
+                </div>
+            `;
+
+            // Список объектов
+            const objectsList = document.createElement('div');
+            objectsList.className = 'objects-list';
+
+            entity.objects.forEach(obj => {
+                const objectDiv = document.createElement('div');
+                objectDiv.className = 'object';
+
+                objectDiv.innerHTML = `
+                    <div class="object-header">
+                        <h3 class="object-name">${obj.name}</h3>
+                    </div>
+                    <div class="properties-list"></div>
+                `;
+
+                const propertiesList = objectDiv.querySelector('.properties-list');
+
+                for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
+                    const propertyDiv = document.createElement('div');
+                    propertyDiv.className = 'property';
+                    propertyDiv.innerHTML = `
+                        <div class="property-name">${charInfo.name}</div>
+                        <div class="property-value">
+                            ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
+                        </div>
+                    `;
+                    propertiesList.appendChild(propertyDiv);
+                }
+
+                objectsList.appendChild(objectDiv);
+            });
+
+            entityDiv.appendChild(objectsList);
+            allDataDiv.appendChild(entityDiv);
+        });
     }
 
     // Загрузка фильтров для единственной сущности при загрузке страницы
@@ -185,6 +176,12 @@
                     });
                 });
         });
+
+        // Добавляем кнопку "Очистить фильтры"
+        const clearButton = document.createElement('button');
+        clearButton.textContent = 'Очистить фильтры';
+        clearButton.onclick = clearFilters;
+        container.appendChild(clearButton);
     }
 
     // Применение фильтров
@@ -220,33 +217,19 @@
         })
             .then(res => res.json())
             .then(data => {
-                displayFilteredResults(data);
+                updatePageWithFilteredData(data);
             });
     }
 
-    function displayFilteredResults(data) {
-        const resultsDiv = document.getElementById('search-results');
-        resultsDiv.innerHTML = '';
-
-        if (data.length === 0) {
-            resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
-            return;
-        }
-
-        let html = '<h3>Результаты фильтрации:</h3>';
-        data.forEach(item => {
-            html += `
-                <div class="search-result">
-                    <p><strong>${item.entity}</strong></p>
-                    <p>Объект: ${item.object}</p>
-                    <p>Характеристика: ${item.characteristic}</p>
-                    <p>Значение: ${item.value}</p>
-                </div>
-            `;
+    // Очистка фильтров
+    function clearFilters() {
+        const selects = document.querySelectorAll('#filters-container select');
+        selects.forEach(select => {
+            select.value = '';
         });
 
-        resultsDiv.innerHTML = html;
-        resultsDiv.style.display = 'block';
+        // Перезагружаем страницу, чтобы показать все данные
+        location.reload();
     }
 </script>
 {% endblock %}

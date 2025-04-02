@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        {% block sidebar %}
+        <!-- Боковая панель категорий -->
         <div class="categories-sidebar">
             <h3>Категории</h3>
             {% for category in categories %}
@@ -38,47 +38,27 @@
                 <button type="button" onclick="applyFilters()">Применить фильтры</button>
             </form>
         </div>
-        {% endblock %}
 
+        <!-- Основной контент -->
         <div class="main-content">
             {% block content %}
-            <div class="entities-list">
-                <h2>Сущности</h2>
-                {% for entity in entities %}
-                <div class="entity-item">
-                    <h3>{{ entity.name }}</h3>
-                    <p><strong>Категория:</strong> {{ entity.category }}</p>
-                    <p><strong>Подкатегория:</strong> {{ entity.subcategory }}</p>
-                    <h4>Объекты:</h4>
-                    <ul>
-                        {% for obj in entity.objects %}
-                        <li>
-                            <strong>{{ obj.name }}</strong>
-                            <ul>
-                                {% for char_id, char_info in obj.characteristics_info.items() %}
-                                <li>
-                                    <strong>{{ char_info.name }}:</strong>
-                                    <div class="property-value">
-                                        {% if char_info.value.startswith('http') %}
-                                            <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
-                                        {% else %}
-                                            {{ char_info.value }}
-                                        {% endif %}
-                                    </div>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endfor %}
-            </div>
+            <!-- Содержимое будет переопределено в дочерних шаблонах -->
             {% endblock %}
         </div>
     </div>
 
     <script>
+        // Функция для сворачивания/разворачивания подкатегорий
+        function toggleCategory(element) {
+            const parent = element.parentElement;
+            parent.classList.toggle('active');
+        }
+
+        // Функция для фильтрации по категории и подкатегории
+        function filterByCategory(category, subcategory) {
+            window.location.href = `/filter?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
+        }
+
         // Загрузка фильтров для единственной сущности при загрузке страницы
         document.addEventListener('DOMContentLoaded', function () {
             const selectedEntity = "{{ entities[0].name }}"; // Имя единственной сущности
@@ -87,6 +67,7 @@
             }
         });
 
+        // Загрузка фильтров для конкретной сущности
         function loadFiltersForEntity(entityName) {
             fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(entityName)}`)
                 .then(res => res.json())
@@ -95,6 +76,7 @@
                 });
         }
 
+        // Заполнение формы фильтрами
         function populateFilters(characteristics) {
             const container = document.getElementById('filters-container');
             container.innerHTML = ''; // Очищаем контейнер
@@ -122,6 +104,12 @@
                         });
                     });
             });
+
+            // Добавляем кнопку "Очистить фильтры"
+            const clearButton = document.createElement('button');
+            clearButton.textContent = 'Очистить фильтры';
+            clearButton.onclick = clearFilters;
+            container.appendChild(clearButton);
         }
 
         // Применение фильтров
@@ -155,43 +143,79 @@
                 },
                 body: JSON.stringify({ entity: selectedEntity, filters })
             })
-            .then(res => res.json())
-            .then(data => {
-                displayFilteredResults(data);
-            });
+                .then(res => res.json())
+                .then(data => {
+                    updatePageWithFilteredData(data);
+                });
         }
 
-        function displayFilteredResults(data) {
-            const resultsDiv = document.getElementById('search-results');
-            resultsDiv.innerHTML = '';
+        // Очистка фильтров
+        function clearFilters() {
+            const selects = document.querySelectorAll('#filters-container select');
+            selects.forEach(select => {
+                select.value = '';
+            });
 
-            if (data.length === 0) {
-                resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+            // Перезагружаем страницу, чтобы показать все данные
+            location.reload();
+        }
+
+        // Обновление DOM с отфильтрованными данными
+        function updatePageWithFilteredData(filteredEntities) {
+            const allDataDiv = document.getElementById('all-data');
+            allDataDiv.innerHTML = ''; // Очищаем текущие данные
+
+            if (filteredEntities.length === 0) {
+                allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
                 return;
             }
 
-            let html = '<h3>Результаты фильтрации:</h3>';
-            data.forEach(item => {
-                html += `
-                    <div class="search-result">
-                        <p><strong>${item.entity}</strong></p>
-                        <p>Объект: ${item.object}</p>
-                        <p>Характеристика: ${item.characteristic}</p>
-                        <p>Значение: ${item.value}</p>
+            filteredEntities.forEach(entity => {
+                const entityDiv = document.createElement('div');
+                entityDiv.className = 'entity';
+
+                // Заголовок сущности
+                entityDiv.innerHTML = `
+                    <div class="entity-header">
+                        <h2 class="entity-name">${entity.name}</h2>
                     </div>
                 `;
+
+                // Список объектов
+                const objectsList = document.createElement('div');
+                objectsList.className = 'objects-list';
+
+                entity.objects.forEach(obj => {
+                    const objectDiv = document.createElement('div');
+                    objectDiv.className = 'object';
+
+                    objectDiv.innerHTML = `
+                        <div class="object-header">
+                            <h3 class="object-name">${obj.name}</h3>
+                        </div>
+                        <div class="properties-list"></div>
+                    `;
+
+                    const propertiesList = objectDiv.querySelector('.properties-list');
+
+                    for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
+                        const propertyDiv = document.createElement('div');
+                        propertyDiv.className = 'property';
+                        propertyDiv.innerHTML = `
+                            <div class="property-name">${charInfo.name}</div>
+                            <div class="property-value">
+                                ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
+                            </div>
+                        `;
+                        propertiesList.appendChild(propertyDiv);
+                    }
+
+                    objectsList.appendChild(objectDiv);
+                });
+
+                entityDiv.appendChild(objectsList);
+                allDataDiv.appendChild(entityDiv);
             });
-
-            resultsDiv.innerHTML = html;
-            resultsDiv.style.display = 'block';
-        }
-
-        function toggleCategory(element) {
-            element.parentElement.classList.toggle('active');
-        }
-
-        function filterByCategory(category, subcategory) {
-            window.location.href = `/filter?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
         }
     </script>
 </body>
