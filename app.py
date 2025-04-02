@@ -160,10 +160,8 @@ def search():
     query = request.args.get('q', '').strip()
     if not query:
         return jsonify([])
-
     conn = get_db_connection()
     cur = conn.cursor()
-
     try:
         cur.execute("""
             SELECT 
@@ -173,58 +171,57 @@ def search():
                 o.name AS object_name,
                 ec.id AS characteristic_id,
                 ec.name AS characteristic_name,
-                ov.value AS characteristic_value
+                ov.value AS characteristic_value,
+                c.name AS category_name,
+                sc.name AS subcategory_name
             FROM objects o
             JOIN entities e ON o.entity_id = e.id
             LEFT JOIN object_values ov ON ov.object_id = o.id
             LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
+            LEFT JOIN categories c ON sc.category_id = c.id
             WHERE o.name ILIKE %s OR e.name ILIKE %s
             ORDER BY e.name, o.name;
         """, (f"%{query}%", f"%{query}%"))
-
         results = cur.fetchall()
-
         # Группируем данные по сущностям и объектам
         grouped_data = {}
         for row in results:
-            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value = row
-
+            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value, category_name, subcategory_name = row
             if entity_id not in grouped_data:
                 grouped_data[entity_id] = {
                     'id': entity_id,
                     'name': entity_name,
+                    'category': category_name if category_name else '',
+                    'subcategory': subcategory_name if subcategory_name else '',
                     'objects': {}
                 }
-
             if object_id not in grouped_data[entity_id]['objects']:
                 grouped_data[entity_id]['objects'][object_id] = {
                     'id': object_id,
                     'name': object_name,
                     'characteristics_info': {}
                 }
-
             if char_id and char_name and char_value:
                 grouped_data[entity_id]['objects'][object_id]['characteristics_info'][char_id] = {
                     'name': char_name,
                     'value': char_value
                 }
-
         # Преобразуем данные в список
         entities = []
         for entity_data in grouped_data.values():
             entity = {
                 'id': entity_data['id'],
                 'name': entity_data['name'],
+                'category': entity_data['category'],
+                'subcategory': entity_data['subcategory'],
                 'objects': list(entity_data['objects'].values())
             }
             entities.append(entity)
-
         return jsonify(entities)
-
     finally:
         cur.close()
         conn.close()
-
 
 @app.route('/get_characteristics_for_entity')
 def get_characteristics_for_entity():
@@ -338,82 +335,74 @@ def get_all_data():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # 1. Получаем все сущности с категориями
+        # Объединяем все данные в один запрос
         cur.execute("""
-            SELECT e.id, e.name, c.name as category, sc.name as subcategory
+            SELECT 
+                e.id AS entity_id,
+                e.name AS entity_name,
+                c.name AS category,
+                sc.name AS subcategory,
+                ec.id AS characteristic_id,
+                ec.name AS characteristic_name,
+                ec.data_type,
+                ec.unit,
+                o.id AS object_id,
+                o.name AS object_name,
+                ov.value AS characteristic_value
             FROM entities e
             LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
             LEFT JOIN categories c ON sc.category_id = c.id
-            ORDER BY e.name
+            LEFT JOIN objects o ON o.entity_id = e.id
+            LEFT JOIN object_values ov ON ov.object_id = o.id
+            LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            ORDER BY e.name, o.name;
         """)
-        entities = {}
-        for row in cur.fetchall():
-            entity_id, entity_name, category, subcategory = row
-            entities[entity_id] = {
-                'id': entity_id,
-                'name': entity_name,
-                'category': category if category else '',
-                'subcategory': subcategory if subcategory else '',
-                'characteristics': [],
-                'objects': []
-            }
-        # 2. Получаем все характеристики для сущностей
-        cur.execute("""
-            SELECT ec.id, ec.entity_id, ec.name, ec.data_type, ec.unit
-            FROM entity_characteristics ec
-            ORDER BY ec.entity_id, ec.name
-        """)
-        characteristics = {}
-        for row in cur.fetchall():
-            char_id, entity_id, char_name, data_type, unit = row
-            char_info = {
-                'id': char_id,
-                'name': char_name,
-                'data_type': data_type if data_type else '',
-                'unit': unit if unit else ''
-            }
-            if entity_id in entities:
-                entities[entity_id]['characteristics'].append(char_info)
-            characteristics[char_id] = char_info
-        # 3. Получаем все объекты
-        cur.execute("""
-            SELECT o.id, o.entity_id, o.name
-            FROM objects o
-            ORDER BY o.entity_id, o.name
-        """)
-        objects = {}
-        for row in cur.fetchall():
-            obj_id, entity_id, obj_name = row
-            if entity_id in entities:
-                obj_info = {
+        results = cur.fetchall()
+
+        # Группируем данные
+        grouped_data = {}
+        for row in results:
+            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
+            if entity_id not in grouped_data:
+                grouped_data[entity_id] = {
+                    'id': entity_id,
+                    'name': entity_name,
+                    'category': category if category else '',
+                    'subcategory': subcategory if subcategory else '',
+                    'objects': {},
+                    'characteristics': {}
+                }
+            if obj_id and obj_id not in grouped_data[entity_id]['objects']:
+                grouped_data[entity_id]['objects'][obj_id] = {
                     'id': obj_id,
                     'name': obj_name,
-                    'values': {}
+                    'characteristics_info': {}
                 }
-                entities[entity_id]['objects'].append(obj_info)
-                objects[obj_id] = obj_info
-        # 4. Получаем все значения характеристик объектов
-        cur.execute("""
-            SELECT ov.object_id, ov.characteristic_id, ov.value
-            FROM object_values ov
-            ORDER BY ov.object_id, ov.characteristic_id
-        """)
-        for row in cur.fetchall():
-            obj_id, char_id, value = row
-            if obj_id in objects and char_id in characteristics:
-                objects[obj_id]['values'][str(char_id)] = value
+            if char_id:
+                grouped_data[entity_id]['characteristics'][char_id] = {
+                    'id': char_id,
+                    'name': char_name,
+                    'data_type': data_type if data_type else '',
+                    'unit': unit if unit else ''
+                }
+                if obj_id and char_value:
+                    grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
+                        'name': char_name,
+                        'value': char_value,
+                        'unit': unit if unit else ''
+                    }
+
+        # Преобразуем данные в список
         result = []
-        for entity in entities.values():
-            for obj in entity['objects']:
-                obj['characteristics_info'] = {}
-                for char_id, value in obj['values'].items():
-                    if int(char_id) in characteristics:
-                        char_info = characteristics[int(char_id)]
-                        obj['characteristics_info'][char_id] = {
-                            'name': char_info['name'],
-                            'value': value,
-                            'unit': char_info['unit']
-                        }
+        for entity_data in grouped_data.values():
+            entity = {
+                'id': entity_data['id'],
+                'name': entity_data['name'],
+                'category': entity_data['category'],
+                'subcategory': entity_data['subcategory'],
+                'characteristics': list(entity_data['characteristics'].values()),
+                'objects': list(entity_data['objects'].values())
+            }
             result.append(entity)
         return result
     finally:

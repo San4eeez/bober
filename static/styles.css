@@ -295,6 +295,66 @@ a {
     text-decoration: underline;
 }
 
+/*.filters-section{*/
+/*    max-width: 25%;*/
+/*}*/
+
+/* Ограничение высоты блока с фильтрами */
+.filters-section {
+    max-height: 400px; /* Максимальная высота */
+    overflow-y: auto; /* Добавляем прокрутку, если контент выходит за пределы */
+    border: 1px solid #ccc; /* Добавляем границу для визуального разделения */
+    padding: 10px; /* Отступы внутри блока */
+    margin-bottom: 20px; /* Отступ снизу */
+}
+
+/* Улучшение внешнего вида полосы прокрутки */
+.filters-section::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.filters-section::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 4px;
+}
+
+.filters-section::-webkit-scrollbar-track {
+    background-color: #f1f1f1;
+}
+
+/* Ограничение размеров блока с фильтрами */
+.filters-section {
+    max-width: 300px; /* Максимальная ширина */
+    max-height: 400px; /* Максимальная высота */
+    overflow-y: auto; /* Добавляем прокрутку по вертикали */
+    overflow-x: hidden; /* Запрещаем горизонтальную прокрутку */
+    border: 1px solid #ccc; /* Граница для визуального разделения */
+    padding: 10px; /* Отступы внутри блока */
+    margin-bottom: 20px; /* Отступ снизу */
+    box-sizing: border-box; /* Учитываем padding и border в ширине */
+}
+
+/* Улучшение внешнего вида полосы прокрутки */
+.filters-section::-webkit-scrollbar {
+    width: 8px;
+}
+
+.filters-section::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 4px;
+}
+
+.filters-section::-webkit-scrollbar-track {
+    background-color: #f1f1f1;
+}
+
+/* Ограничение ширины элементов внутри блока фильтров */
+.filters-section form,
+.filters-section div {
+    max-width: 100%; /* Элементы не должны выходить за пределы блока */
+    word-wrap: break-word; /* Перенос длинных слов */
+}
 
 /* Адаптивность */
 @media (max-width: 768px) {

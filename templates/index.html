@@ -7,55 +7,7 @@
 
 <div id="all-data">
     {% for entity in entities %}
-    <div class="entity">
-        <div class="entity-header">
-            <h2 class="entity-name">{{ entity.name }}</h2>
-            <div class="entity-category">
-                {{ entity.category }} / {{ entity.subcategory }}
-            </div>
-        </div>
-
-        <div class="characteristics-list">
-            {% for char in entity.characteristics %}
-            <div class="characteristic-tag">
-                <span>{{ char.name }}</span>
-                {% if char.data_type %}
-                <span class="type-badge">{{ char.data_type }}</span>
-                {% endif %}
-                {% if char.unit %}
-                <span class="unit-badge">{{ char.unit }}</span>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-
-        <div class="objects-list">
-            {% for obj in entity.objects %}
-            <div class="object">
-                <div class="object-header">
-                    <h3 class="object-name">{{ obj.name }}</h3>
-                </div>
-                <div class="properties-list">
-                    {% for char_id, char_info in obj.characteristics_info.items() %}
-                    <div class="property">
-                        <div class="property-name">{{ char_info.name }}</div>
-                        <div class="property-value">
-                            {% if char_info.value.startswith('http') %}
-                                <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
-                            {% else %}
-                                {{ char_info.value }}
-                            {% endif %}
-                            {% if char_info.unit %}
-                                <span class="unit">{{ char_info.unit }}</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
+    {% include '_entity.html' %}
     {% endfor %}
 </div>
 
@@ -70,7 +22,6 @@
                     updatePageWithFilteredData(data);
                 });
         } else {
-            // Если запрос пустой, показываем все данные
             location.reload();
         }
     });
@@ -89,10 +40,16 @@
             const entityDiv = document.createElement('div');
             entityDiv.className = 'entity';
 
-            // Заголовок сущности
+            // Заголовок сущности с ссылкой на категорию и подкатегорию
             entityDiv.innerHTML = `
                 <div class="entity-header">
                     <h2 class="entity-name">${entity.name}</h2>
+                    <div class="category-link">
+                        Категория:
+                        <a href="/filter?category=${encodeURIComponent(entity.category)}&subcategory=${encodeURIComponent(entity.subcategory)}">
+                            ${entity.category} > ${entity.subcategory}
+                        </a>
+                    </div>
                 </div>
             `;
 
@@ -131,105 +88,6 @@
             entityDiv.appendChild(objectsList);
             allDataDiv.appendChild(entityDiv);
         });
-    }
-
-    // Загрузка фильтров для единственной сущности при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function () {
-        const selectedEntity = "{{ entities[0].name }}"; // Имя единственной сущности
-        if (selectedEntity) {
-            loadFiltersForEntity(selectedEntity);
-        }
-    });
-
-    function loadFiltersForEntity(entityName) {
-        fetch(`/get_characteristics_for_entity?entity_name=${encodeURIComponent(entityName)}`)
-            .then(res => res.json())
-            .then(characteristics => {
-                populateFilters(characteristics);
-            });
-    }
-
-    function populateFilters(characteristics) {
-        const container = document.getElementById('filters-container');
-        container.innerHTML = ''; // Очищаем контейнер
-
-        characteristics.forEach(charName => {
-            const div = document.createElement('div');
-            div.innerHTML = `
-                <label>${charName}:</label>
-                <select data-char="${charName}">
-                    <option value="">-- Выберите значение --</option>
-                </select>
-            `;
-            container.appendChild(div);
-
-            // Загружаем уникальные значения для характеристики
-            fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name }}")}&characteristic_name=${encodeURIComponent(charName)}`)
-                .then(res => res.json())
-                .then(values => {
-                    const select = div.querySelector('select');
-                    values.forEach(value => {
-                        const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = value;
-                        select.appendChild(option);
-                    });
-                });
-        });
-
-        // Добавляем кнопку "Очистить фильтры"
-        const clearButton = document.createElement('button');
-        clearButton.textContent = 'Очистить фильтры';
-        clearButton.onclick = clearFilters;
-        container.appendChild(clearButton);
-    }
-
-    // Применение фильтров
-    function applyFilters() {
-        const selectedEntity = "{{ entities[0].name }}";
-        if (!selectedEntity) {
-            alert('Сущность не найдена.');
-            return;
-        }
-
-        const selects = document.querySelectorAll('#filters-container select');
-        const filters = {};
-
-        selects.forEach(select => {
-            const charName = select.getAttribute('data-char');
-            const value = select.value.trim();
-            if (value) {
-                filters[charName] = value;
-            }
-        });
-
-        if (Object.keys(filters).length === 0) {
-            alert('Пожалуйста, укажите хотя бы один фильтр.');
-            return;
-        }
-
-        fetch('/filter_by_params', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ entity: selectedEntity, filters })
-        })
-            .then(res => res.json())
-            .then(data => {
-                updatePageWithFilteredData(data);
-            });
-    }
-
-    // Очистка фильтров
-    function clearFilters() {
-        const selects = document.querySelectorAll('#filters-container select');
-        selects.forEach(select => {
-            select.value = '';
-        });
-
-        // Перезагружаем страницу, чтобы показать все данные
-        location.reload();
     }
 </script>
 {% endblock %}
