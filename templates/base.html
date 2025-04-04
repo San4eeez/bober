@@ -1,3 +1,5 @@
+<!--base html-->
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -15,7 +17,7 @@
             <div class="category-item">
                 <div class="category-name" onclick="toggleCategory(this)">
                     {{ category.name }}
-                    <span class="count-badge">{{ category.count }}</span>
+                    <span class="count-badge">{{ category.count }}▼</span>
                 </div>
                 <div class="subcategory-list">
                     {% for subcategory in category.subcategories %}
