@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="cart-content">
+    <h1>Ваша корзина</h1>
+
+    {% if not cart_entities %}
+        <p>Ваша корзина пуста</p>
+    {% else %}
+        <div id="cart-items">
+            {% for entity in cart_entities %}
+                {% include '_entity.html' %}
+            {% endfor %}
+        </div>
+
+        <div class="cart-actions">
+            <button id="clear-cart">Очистить корзину</button>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

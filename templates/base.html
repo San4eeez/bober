@@ -1,5 +1,3 @@
-<!--base html-->
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -9,6 +7,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    <header>
+        <nav>
+            <a href="/" class="nav-button">Главная</a>
+            <a href="/cart" class="nav-button">Корзина (<span id="cart-counter">{{ session.get('cart', [])|length }}</span>)</a>
+        </nav>
+    </header>
+
     <div class="container">
         <!-- Боковая панель категорий -->
         <div class="categories-sidebar">
@@ -63,7 +68,7 @@
 
         // Загрузка фильтров для единственной сущности при загрузке страницы
         document.addEventListener('DOMContentLoaded', function () {
-            const selectedEntity = "{{ entities[0].name }}"; // Имя единственной сущности
+            const selectedEntity = "{{ entities[0].name if entities else '' }}";
             if (selectedEntity) {
                 loadFiltersForEntity(selectedEntity);
             }
@@ -81,7 +86,7 @@
         // Заполнение формы фильтрами
         function populateFilters(characteristics) {
             const container = document.getElementById('filters-container');
-            container.innerHTML = ''; // Очищаем контейнер
+            container.innerHTML = '';
 
             characteristics.forEach(charName => {
                 const div = document.createElement('div');
@@ -93,8 +98,7 @@
                 `;
                 container.appendChild(div);
 
-                // Загружаем уникальные значения для характеристики
-                fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name }}")}&characteristic_name=${encodeURIComponent(charName)}`)
+                fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name if entities else '' }}")}&characteristic_name=${encodeURIComponent(charName)}`)
                     .then(res => res.json())
                     .then(values => {
                         const select = div.querySelector('select');
@@ -106,17 +110,11 @@
                         });
                     });
             });
-
-            // // Добавляем кнопку "Очистить фильтры"
-            // const clearButton = document.createElement('button');
-            // clearButton.textContent = 'Очистить фильтры';
-            // clearButton.onclick = clearFilters;
-            // container.appendChild(clearButton);
         }
 
         // Применение фильтров
         function applyFilters() {
-            const selectedEntity = "{{ entities[0].name }}";
+            const selectedEntity = "{{ entities[0].name if entities else '' }}";
             if (!selectedEntity) {
                 alert('Сущность не найдена.');
                 return;
@@ -151,80 +149,141 @@
                 });
         }
 
-        // Очистка фильтров
-        function clearFilters() {
-            const selects = document.querySelectorAll('#filters-container select');
-            selects.forEach(select => {
-                select.value = '';
-            });
-
-            // Перезагружаем страницу, чтобы показать все данные
-            location.reload();
-        }
-
         // Обновление DOM с отфильтрованными данными
         function updatePageWithFilteredData(filteredEntities) {
-    const allDataDiv = document.getElementById('all-data');
-    allDataDiv.innerHTML = ''; // Очищаем текущие данные
+            const allDataDiv = document.getElementById('all-data');
+            if (!allDataDiv) return;
+            
+            allDataDiv.innerHTML = '';
 
-    if (filteredEntities.length === 0) {
-        allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
-        return;
-    }
-
-    filteredEntities.forEach(entity => {
-        const entityDiv = document.createElement('div');
-        entityDiv.className = 'entity';
-
-        // Заголовок сущности с ссылкой на категорию и подкатегорию
-        entityDiv.innerHTML = `
-            <div class="entity-header">
-                <h2 class="entity-name">${entity.name}</h2>
-                <div class="category-link">
-                    Категория:
-                    <a href="/filter?category=${encodeURIComponent(entity.category)}&subcategory=${encodeURIComponent(entity.subcategory)}">
-                        ${entity.category} > ${entity.subcategory}
-                    </a>
-                </div>
-            </div>
-        `;
-
-        // Список объектов
-        const objectsList = document.createElement('div');
-        objectsList.className = 'objects-list';
-
-        entity.objects.forEach(obj => {
-            const objectDiv = document.createElement('div');
-            objectDiv.className = 'object';
-
-            objectDiv.innerHTML = `
-                <div class="object-header">
-                    <h3 class="object-name">${obj.name}</h3>
-                </div>
-                <div class="properties-list"></div>
-            `;
-
-            const propertiesList = objectDiv.querySelector('.properties-list');
-
-            for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
-                const propertyDiv = document.createElement('div');
-                propertyDiv.className = 'property';
-                propertyDiv.innerHTML = `
-                    <div class="property-name">${charInfo.name}</div>
-                    <div class="property-value">
-                        ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
-                    </div>
-                `;
-                propertiesList.appendChild(propertyDiv);
+            if (filteredEntities.length === 0) {
+                allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
+                return;
             }
 
-            objectsList.appendChild(objectDiv);
-        });
+            filteredEntities.forEach(entity => {
+                const entityDiv = document.createElement('div');
+                entityDiv.className = 'entity';
+                entityDiv.innerHTML = `
+                    <div class="entity-header">
+                        <h2 class="entity-name">${entity.name}</h2>
+                        <div class="category-link">
+                            Категория:
+                            <a href="/filter?category=${encodeURIComponent(entity.category)}&subcategory=${encodeURIComponent(entity.subcategory)}">
+                                ${entity.category} > ${entity.subcategory}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="objects-list"></div>
+                `;
 
-        entityDiv.appendChild(objectsList);
-        allDataDiv.appendChild(entityDiv);
-    });
-}
+                const objectsList = entityDiv.querySelector('.objects-list');
+                entity.objects.forEach(obj => {
+                    const objectDiv = document.createElement('div');
+                    objectDiv.className = 'object';
+                    objectDiv.innerHTML = `
+                        <div class="object-header">
+                            <h3 class="object-name">${obj.name}</h3>
+                            <button class="add-to-cart" data-object-id="${obj.id}">В корзину</button>
+                        </div>
+                        <div class="properties-list"></div>
+                    `;
+
+                    const propertiesList = objectDiv.querySelector('.properties-list');
+                    for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
+                        const propertyDiv = document.createElement('div');
+                        propertyDiv.className = 'property';
+                        propertyDiv.innerHTML = `
+                            <div class="property-name">${charInfo.name}</div>
+                            <div class="property-value">
+                                ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
+                                ${charInfo.unit ? `<span class="unit">${charInfo.unit}</span>` : ''}
+                            </div>
+                        `;
+                        propertiesList.appendChild(propertyDiv);
+                    }
+
+                    objectsList.appendChild(objectDiv);
+                });
+
+                allDataDiv.appendChild(entityDiv);
+            });
+        }
+
+        // Обработка корзины
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('add-to-cart')) {
+                const objectId = e.target.getAttribute('data-object-id');
+                
+                fetch('/add_to_cart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ object_id: objectId })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('cart-counter').textContent = data.cart_count;
+                        showNotification('Товар добавлен в корзину');
+                    }
+                });
+            }
+            
+            if (e.target.classList.contains('remove-from-cart')) {
+                const objectId = e.target.getAttribute('data-object-id');
+                
+                fetch('/remove_from_cart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ object_id: objectId })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('cart-counter').textContent = data.cart_count;
+                        e.target.closest('.object').remove();
+                        showNotification('Товар удалён из корзины');
+                        
+                        if (data.cart_count == 0) {
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Очистка корзины
+        const clearCartBtn = document.getElementById('clear-cart');
+        if (clearCartBtn) {
+            clearCartBtn.addEventListener('click', function() {
+                if (confirm('Вы уверены, что хотите очистить корзину?')) {
+                    fetch('/clear_cart', {
+                        method: 'POST'
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        }
+        
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 2000);
+        }
     </script>
 </body>
 </html>

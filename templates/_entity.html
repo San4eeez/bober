@@ -1,9 +1,8 @@
-<!-- _entity.html -->
 <div class="entity">
     <div class="entity-header">
         <h2 class="entity-name">{{ entity.name }}</h2>
         <div class="category-link">
-            Категория: 
+            Категория:
             <a href="/filter?category={{ entity.category }}&subcategory={{ entity.subcategory }}">
                 {{ entity.category }} > {{ entity.subcategory }}
             </a>
@@ -15,6 +14,11 @@
         <div class="object">
             <div class="object-header">
                 <h3 class="object-name">{{ obj.name }}</h3>
+                {% if request.path == url_for('view_cart') %}
+                    <button class="remove-from-cart" data-object-id="{{ obj.id }}">Удалить</button>
+                {% else %}
+                    <button class="add-to-cart" data-object-id="{{ obj.id }}">В корзину</button>
+                {% endif %}
             </div>
             <div class="properties-list">
                 {% for char_id, char_info in obj.characteristics_info.items() %}

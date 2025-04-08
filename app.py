@@ -1,9 +1,13 @@
 # app.py
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import psycopg2
 
 app = Flask(__name__)
+
+# Секретный ключ для подписи сессий
+# В реальном проекте используйте сложный ключ и храните его в переменных окружения
+app.secret_key = 'dev_secret_key_123'
 
 # Конфигурация БД
 DB_CONFIG = {
@@ -410,6 +414,131 @@ def get_all_data():
     finally:
         cur.close()
         conn.close()
+
+
+# Новые маршруты для корзины
+@app.route('/add_to_cart', methods=['POST'])
+def add_to_cart():
+    object_id = request.json.get('object_id')
+    if 'cart' not in session:
+        session['cart'] = []
+
+    # Добавляем объект, если его ещё нет в корзине
+    if object_id not in session['cart']:
+        session['cart'].append(object_id)
+        session.modified = True
+
+    return jsonify({
+        'success': True,
+        'cart_count': len(session['cart'])
+    })
+
+
+@app.route('/remove_from_cart', methods=['POST'])
+def remove_from_cart():
+    object_id = request.json.get('object_id')
+    if 'cart' in session and object_id in session['cart']:
+        session['cart'].remove(object_id)
+        session.modified = True
+
+    return jsonify({
+        'success': True,
+        'cart_count': len(session.get('cart', []))
+    })
+
+
+@app.route('/cart')
+def view_cart():
+    if 'cart' not in session or not session['cart']:
+        return render_template('cart.html', cart_entities=[])
+
+    # Получаем данные для объектов в корзине
+    cart_entities = get_entities_by_object_ids(session['cart'])
+    return render_template('cart.html', cart_entities=cart_entities)
+
+
+@app.route('/clear_cart', methods=['POST'])
+def clear_cart():
+    session.pop('cart', None)
+    return jsonify({'success': True})
+
+
+def get_entities_by_object_ids(object_ids):
+    """Получает полные данные сущностей по ID объектов"""
+    if not object_ids:
+        return []
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    placeholders = ','.join(['%s'] * len(object_ids))
+    cur.execute(f"""
+        SELECT 
+            e.id AS entity_id,
+            e.name AS entity_name,
+            c.name AS category,
+            sc.name AS subcategory,
+            ec.id AS characteristic_id,
+            ec.name AS characteristic_name,
+            ec.data_type,
+            ec.unit,
+            o.id AS object_id,
+            o.name AS object_name,
+            ov.value AS characteristic_value
+        FROM objects o
+        JOIN entities e ON o.entity_id = e.id
+        LEFT JOIN object_values ov ON ov.object_id = o.id
+        LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+        LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
+        LEFT JOIN categories c ON sc.category_id = c.id
+        WHERE o.id IN ({placeholders})
+        ORDER BY e.name, o.name;
+    """, tuple(object_ids))
+
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # Группируем данные как в get_all_data()
+    grouped_data = {}
+    for row in results:
+        entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
+        if entity_id not in grouped_data:
+            grouped_data[entity_id] = {
+                'id': entity_id,
+                'name': entity_name,
+                'category': category if category else '',
+                'subcategory': subcategory if subcategory else '',
+                'objects': {},
+                'characteristics': {}
+            }
+
+        if obj_id not in grouped_data[entity_id]['objects']:
+            grouped_data[entity_id]['objects'][obj_id] = {
+                'id': obj_id,
+                'name': obj_name,
+                'characteristics_info': {}
+            }
+
+        if char_id:
+            grouped_data[entity_id]['characteristics'][char_id] = {
+                'id': char_id,
+                'name': char_name,
+                'data_type': data_type if data_type else '',
+                'unit': unit if unit else ''
+            }
+
+            if char_value:
+                grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
+                    'name': char_name,
+                    'value': char_value,
+                    'unit': unit if unit else ''
+                }
+
+    return [{'id': e['id'], 'name': e['name'], 'category': e['category'],
+             'subcategory': e['subcategory'], 'objects': list(e['objects'].values()),
+             'characteristics': list(e['characteristics'].values())}
+            for e in grouped_data.values()]
 
 
 if __name__ == '__main__':

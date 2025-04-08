@@ -1,5 +1,3 @@
-<!--index html-->
-
 {% extends "base.html" %}
 
 {% block content %}
@@ -27,69 +25,5 @@
             location.reload();
         }
     });
-
-    // Обновление DOM с отфильтрованными данными
-    function updatePageWithFilteredData(filteredEntities) {
-        const allDataDiv = document.getElementById('all-data');
-        allDataDiv.innerHTML = ''; // Очищаем текущие данные
-
-        if (filteredEntities.length === 0) {
-            allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
-            return;
-        }
-
-        filteredEntities.forEach(entity => {
-            const entityDiv = document.createElement('div');
-            entityDiv.className = 'entity';
-
-            // Заголовок сущности с ссылкой на категорию и подкатегорию
-            entityDiv.innerHTML = `
-                <div class="entity-header">
-                    <h2 class="entity-name">${entity.name}</h2>
-                    <div class="category-link">
-                        Категория:
-                        <a href="/filter?category=${encodeURIComponent(entity.category)}&subcategory=${encodeURIComponent(entity.subcategory)}">
-                            ${entity.category} > ${entity.subcategory}
-                        </a>
-                    </div>
-                </div>
-            `;
-
-            // Список объектов
-            const objectsList = document.createElement('div');
-            objectsList.className = 'objects-list';
-
-            entity.objects.forEach(obj => {
-                const objectDiv = document.createElement('div');
-                objectDiv.className = 'object';
-
-                objectDiv.innerHTML = `
-                    <div class="object-header">
-                        <h3 class="object-name">${obj.name}</h3>
-                    </div>
-                    <div class="properties-list"></div>
-                `;
-
-                const propertiesList = objectDiv.querySelector('.properties-list');
-
-                for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
-                    const propertyDiv = document.createElement('div');
-                    propertyDiv.className = 'property';
-                    propertyDiv.innerHTML = `
-                        <div class="property-name">${charInfo.name}</div>
-                        <div class="property-value">
-                            ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
-                        </div>
-                    `;
-                    propertiesList.appendChild(propertyDiv);
-                }
-
-                objectsList.appendChild(objectDiv);
-            });
-
-            entityDiv.appendChild(objectsList);
-            allDataDiv.appendChild(entityDiv);
-        });
-    }
 </script>
 {% endblock %}
