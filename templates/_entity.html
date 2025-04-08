@@ -11,14 +11,27 @@
 
     <div class="objects-list">
         {% for obj in entity.objects %}
-        <div class="object">
+        <div class="object" data-object-id="{{ obj.id }}">
             <div class="object-header">
                 <h3 class="object-name">{{ obj.name }}</h3>
-                {% if request.path == url_for('view_cart') %}
-                    <button class="remove-from-cart" data-object-id="{{ obj.id }}">Удалить</button>
-                {% else %}
-                    <button class="add-to-cart" data-object-id="{{ obj.id }}">В корзину</button>
-                {% endif %}
+                <div class="object-actions">
+                    <div class="quantity-controls">
+                        <button class="quantity-btn minus" data-object-id="{{ obj.id }}">-</button>
+                        <span class="quantity">
+                            {% if request.path == url_for('view_cart') %}
+                                {{ cart_items.get(obj.id|string, 1) }}
+                            {% else %}
+                                1
+                            {% endif %}
+                        </span>
+                        <button class="quantity-btn plus" data-object-id="{{ obj.id }}">+</button>
+                    </div>
+                    {% if request.path == url_for('view_cart') %}
+                        <button class="remove-from-cart" data-object-id="{{ obj.id }}">Удалить</button>
+                    {% else %}
+                        <button class="add-to-cart" data-object-id="{{ obj.id }}">В корзину</button>
+                    {% endif %}
+                </div>
             </div>
             <div class="properties-list">
                 {% for char_id, char_info in obj.characteristics_info.items() %}

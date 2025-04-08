@@ -1,13 +1,9 @@
 # app.py
-
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import psycopg2
 
 app = Flask(__name__)
-
-# Секретный ключ для подписи сессий
-# В реальном проекте используйте сложный ключ и храните его в переменных окружения
-app.secret_key = 'dev_secret_key_123'
+app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
 
 # Конфигурация БД
 DB_CONFIG = {
@@ -18,58 +14,105 @@ DB_CONFIG = {
     'port': '5432'
 }
 
-
 def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+    """Создаёт подключение к базе данных."""
+    try:
+        return psycopg2.connect(**DB_CONFIG)
+    except Exception as e:
+        print(f"Ошибка подключения к базе данных: {e}")
+        raise
 
+def filter_entities_by_default(category, subcategory):
+    """Функция для фильтрации по первой категории и подкатегории"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Получаем категории для боковой панели
+        cur.execute("""
+            SELECT c.name as category, sc.name as subcategory, 
+                   COUNT(DISTINCT o.id) as object_count
+            FROM categories c
+            LEFT JOIN subcategories sc ON c.id = sc.category_id
+            LEFT JOIN entities e ON e.subcategory_id = sc.id
+            LEFT JOIN objects o ON o.entity_id = e.id
+            GROUP BY c.name, sc.name
+            ORDER BY c.name, sc.name
+        """)
+        categories_data = {}
+        for cat, subcat, count in cur.fetchall():
+            if cat not in categories_data:
+                categories_data[cat] = {'count': 0, 'subcategories': []}
+            if subcat:
+                categories_data[cat]['subcategories'].append({
+                    'name': subcat,
+                    'count': count
+                })
+                categories_data[cat]['count'] += count
+
+        # Получаем отфильтрованные сущности
+        cur.execute("""
+            SELECT e.id
+            FROM entities e
+            JOIN subcategories sc ON e.subcategory_id = sc.id
+            JOIN categories c ON sc.category_id = c.id
+            WHERE c.name = %s AND sc.name = %s
+        """, (category, subcategory))
+        entity_ids = [row[0] for row in cur.fetchall()]
+        all_entities = get_all_data()
+        filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
+        return render_template('index.html',
+                               categories=[{'name': k, **v} for k, v in categories_data.items()],
+                               entities=filtered_entities)
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/')
 def index():
     conn = get_db_connection()
     cur = conn.cursor()
+    try:
+        # Получаем все категории и подкатегории с количеством объектов
+        cur.execute("""
+            SELECT c.name as category, sc.name as subcategory, 
+                   COUNT(DISTINCT o.id) as object_count
+            FROM categories c
+            LEFT JOIN subcategories sc ON c.id = sc.category_id
+            LEFT JOIN entities e ON e.subcategory_id = sc.id
+            LEFT JOIN objects o ON o.entity_id = e.id
+            GROUP BY c.name, sc.name
+            ORDER BY c.name, sc.name
+        """)
+        categories = {}
+        first_category = None
+        first_subcategory = None
+        for category, subcategory, count in cur.fetchall():
+            if category not in categories:
+                categories[category] = {'count': 0, 'subcategories': []}
+            if subcategory:
+                categories[category]['subcategories'].append({
+                    'name': subcategory,
+                    'count': count
+                })
+                categories[category]['count'] += count
+            # Сохраняем первую категорию и подкатегорию
+            if first_category is None and category:
+                first_category = category
+            if first_subcategory is None and subcategory:
+                first_subcategory = subcategory
 
-    # Получаем все категории и подкатегории с количеством объектов
-    cur.execute("""
-        SELECT c.name as category, sc.name as subcategory, 
-               COUNT(DISTINCT o.id) as object_count
-        FROM categories c
-        LEFT JOIN subcategories sc ON c.id = sc.category_id
-        LEFT JOIN entities e ON e.subcategory_id = sc.id
-        LEFT JOIN objects o ON o.entity_id = e.id
-        GROUP BY c.name, sc.name
-        ORDER BY c.name, sc.name
-    """)
-    categories = {}
-    first_category = None
-    first_subcategory = None
+        # Если найдена первая категория и подкатегория, перенаправляем на них
+        if first_category and first_subcategory:
+            return filter_entities_by_default(first_category, first_subcategory)
 
-    for category, subcategory, count in cur.fetchall():
-        if category not in categories:
-            categories[category] = {'count': 0, 'subcategories': []}
-
-        if subcategory:
-            categories[category]['subcategories'].append({
-                'name': subcategory,
-                'count': count
-            })
-            categories[category]['count'] += count
-
-        # Сохраняем первую категорию и подкатегорию
-        if first_category is None and category:
-            first_category = category
-        if first_subcategory is None and subcategory:
-            first_subcategory = subcategory
-
-    # Если найдена первая категория и подкатегория, перенаправляем на них
-    if first_category and first_subcategory:
-        return filter_entities_by_default(first_category, first_subcategory)
-
-    # Если категорий нет, показываем пустую страницу
-    entities = get_all_data()
-    return render_template('index.html',
-                           categories=[{'name': k, **v} for k, v in categories.items()],
-                           entities=entities)
-
+        # Если категорий нет, показываем пустую страницу
+        entities = get_all_data()
+        return render_template('index.html',
+                               categories=[{'name': k, **v} for k, v in categories.items()],
+                               entities=entities)
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/filter')
 def filter_entities():
@@ -77,89 +120,46 @@ def filter_entities():
     subcategory = request.args.get('subcategory')
     conn = get_db_connection()
     cur = conn.cursor()
+    try:
+        # Получаем категории для боковой панели
+        cur.execute("""
+            SELECT c.name as category, sc.name as subcategory, 
+                   COUNT(DISTINCT o.id) as object_count
+            FROM categories c
+            LEFT JOIN subcategories sc ON c.id = sc.category_id
+            LEFT JOIN entities e ON e.subcategory_id = sc.id
+            LEFT JOIN objects o ON o.entity_id = e.id
+            GROUP BY c.name, sc.name
+            ORDER BY c.name, sc.name
+        """)
+        categories_data = {}
+        for cat, subcat, count in cur.fetchall():
+            if cat not in categories_data:
+                categories_data[cat] = {'count': 0, 'subcategories': []}
+            if subcat:
+                categories_data[cat]['subcategories'].append({
+                    'name': subcat,
+                    'count': count
+                })
+                categories_data[cat]['count'] += count
 
-    # Получаем категории для боковой панели
-    cur.execute("""
-        SELECT c.name as category, sc.name as subcategory, 
-               COUNT(DISTINCT o.id) as object_count
-        FROM categories c
-        LEFT JOIN subcategories sc ON c.id = sc.category_id
-        LEFT JOIN entities e ON e.subcategory_id = sc.id
-        LEFT JOIN objects o ON o.entity_id = e.id
-        GROUP BY c.name, sc.name
-        ORDER BY c.name, sc.name
-    """)
-    categories_data = {}
-    for cat, subcat, count in cur.fetchall():
-        if cat not in categories_data:
-            categories_data[cat] = {'count': 0, 'subcategories': []}
-        if subcat:
-            categories_data[cat]['subcategories'].append({
-                'name': subcat,
-                'count': count
-            })
-            categories_data[cat]['count'] += count
-
-    # Получаем отфильтрованные сущности
-    cur.execute("""
-        SELECT e.id
-        FROM entities e
-        JOIN subcategories sc ON e.subcategory_id = sc.id
-        JOIN categories c ON sc.category_id = c.id
-        WHERE c.name = %s AND sc.name = %s
-    """, (category, subcategory))
-    entity_ids = [row[0] for row in cur.fetchall()]
-
-    all_entities = get_all_data()
-    filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
-
-    return render_template('index.html',
-                           categories=[{'name': k, **v} for k, v in categories_data.items()],
-                           entities=filtered_entities)
-
-def filter_entities_by_default(category, subcategory):
-    """Функция для фильтрации по первой категории и подкатегории"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Получаем категории для боковой панели
-    cur.execute("""
-        SELECT c.name as category, sc.name as subcategory, 
-               COUNT(DISTINCT o.id) as object_count
-        FROM categories c
-        LEFT JOIN subcategories sc ON c.id = sc.category_id
-        LEFT JOIN entities e ON e.subcategory_id = sc.id
-        LEFT JOIN objects o ON o.entity_id = e.id
-        GROUP BY c.name, sc.name
-        ORDER BY c.name, sc.name
-    """)
-    categories_data = {}
-    for cat, subcat, count in cur.fetchall():
-        if cat not in categories_data:
-            categories_data[cat] = {'count': 0, 'subcategories': []}
-        if subcat:
-            categories_data[cat]['subcategories'].append({
-                'name': subcat,
-                'count': count
-            })
-            categories_data[cat]['count'] += count
-
-    # Получаем отфильтрованные сущности
-    cur.execute("""
-        SELECT e.id
-        FROM entities e
-        JOIN subcategories sc ON e.subcategory_id = sc.id
-        JOIN categories c ON sc.category_id = c.id
-        WHERE c.name = %s AND sc.name = %s
-    """, (category, subcategory))
-    entity_ids = [row[0] for row in cur.fetchall()]
-    all_entities = get_all_data()
-    filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
-
-    return render_template('index.html',
-                           categories=[{'name': k, **v} for k, v in categories_data.items()],
-                           entities=filtered_entities)
-
+        # Получаем отфильтрованные сущности
+        cur.execute("""
+            SELECT e.id
+            FROM entities e
+            JOIN subcategories sc ON e.subcategory_id = sc.id
+            JOIN categories c ON sc.category_id = c.id
+            WHERE c.name = %s AND sc.name = %s
+        """, (category, subcategory))
+        entity_ids = [row[0] for row in cur.fetchall()]
+        all_entities = get_all_data()
+        filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
+        return render_template('index.html',
+                               categories=[{'name': k, **v} for k, v in categories_data.items()],
+                               entities=filtered_entities)
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/search')
 def search():
@@ -190,6 +190,7 @@ def search():
             ORDER BY e.name, o.name;
         """, (f"%{query}%", f"%{query}%"))
         results = cur.fetchall()
+
         # Группируем данные по сущностям и объектам
         grouped_data = {}
         for row in results:
@@ -213,6 +214,7 @@ def search():
                     'name': char_name,
                     'value': char_value
                 }
+
         # Преобразуем данные в список
         entities = []
         for entity_data in grouped_data.values():
@@ -248,7 +250,6 @@ def get_characteristics_for_entity():
         cur.close()
         conn.close()
 
-
 @app.route('/get_characteristic_values')
 def get_characteristic_values():
     """Получает уникальные значения для характеристики"""
@@ -273,19 +274,15 @@ def get_characteristic_values():
         cur.close()
         conn.close()
 
-
 @app.route('/filter_by_params', methods=['POST'])
 def filter_by_params():
     data = request.json
     entity_name = data.get('entity')
     filters = data.get('filters')
-
     if not entity_name or not filters:
         return jsonify([])
-
     conn = get_db_connection()
     cur = conn.cursor()
-
     try:
         # 1. Получаем ID объектов, которые соответствуют фильтрам
         query = """
@@ -297,11 +294,9 @@ def filter_by_params():
             WHERE e.name = %s
         """
         params = [entity_name]
-
         for char_name, value in filters.items():
             query += " AND ec.name = %s AND ov.value = %s"
             params.extend([char_name, value])
-
         cur.execute(query, params)
         filtered_object_ids = [row[0] for row in cur.fetchall()]
 
@@ -312,7 +307,6 @@ def filter_by_params():
         # 2. Получаем полные данные для отфильтрованных объектов
         all_entities = get_all_data()
         filtered_entities = []
-
         for entity in all_entities:
             if entity['name'] == entity_name:
                 # Фильтруем объекты по их ID
@@ -330,9 +324,7 @@ def filter_by_params():
                         'objects': filtered_objects
                     }
                     filtered_entities.append(filtered_entity)
-
         return jsonify(filtered_entities)
-
     finally:
         cur.close()
         conn.close()
@@ -341,7 +333,6 @@ def get_all_data():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Объединяем все данные в один запрос
         cur.execute("""
             SELECT 
                 e.id AS entity_id,
@@ -415,131 +406,128 @@ def get_all_data():
         cur.close()
         conn.close()
 
-
-# Новые маршруты для корзины
+# Маршруты для корзины
 @app.route('/add_to_cart', methods=['POST'])
 def add_to_cart():
     object_id = request.json.get('object_id')
+    quantity = int(request.json.get('quantity', 1))
     if 'cart' not in session:
-        session['cart'] = []
-
-    # Добавляем объект, если его ещё нет в корзине
-    if object_id not in session['cart']:
-        session['cart'].append(object_id)
-        session.modified = True
-
+        session['cart'] = {}
+    session['cart'][object_id] = session['cart'].get(object_id, 0) + quantity
+    session.modified = True
     return jsonify({
         'success': True,
-        'cart_count': len(session['cart'])
+        'cart_count': sum(session['cart'].values())
     })
-
 
 @app.route('/remove_from_cart', methods=['POST'])
 def remove_from_cart():
     object_id = request.json.get('object_id')
     if 'cart' in session and object_id in session['cart']:
-        session['cart'].remove(object_id)
+        del session['cart'][object_id]
         session.modified = True
-
     return jsonify({
         'success': True,
-        'cart_count': len(session.get('cart', []))
+        'cart_count': sum(session.get('cart', {}).values())
     })
 
+@app.route('/update_cart_quantity', methods=['POST'])
+def update_cart_quantity():
+    object_id = request.json.get('object_id')
+    quantity = int(request.json.get('quantity', 1))
+    if 'cart' in session and object_id in session['cart']:
+        session['cart'][object_id] = quantity
+        session.modified = True
+    return jsonify({
+        'success': True,
+        'cart_count': sum(session.get('cart', {}).values())
+    })
+
+@app.route('/cart_count')
+def cart_count():
+    """Возвращает количество товаров в корзине."""
+    count = sum(session.get('cart', {}).values())
+    return jsonify({'success': True, 'count': count})
 
 @app.route('/cart')
 def view_cart():
+    """Страница корзины."""
     if 'cart' not in session or not session['cart']:
-        return render_template('cart.html', cart_entities=[])
-
-    # Получаем данные для объектов в корзине
-    cart_entities = get_entities_by_object_ids(session['cart'])
-    return render_template('cart.html', cart_entities=cart_entities)
-
-
-@app.route('/clear_cart', methods=['POST'])
-def clear_cart():
-    session.pop('cart', None)
-    return jsonify({'success': True})
-
-
+        return render_template('cart.html', cart_entities=[], cart_items={})
+    cart_entities = get_entities_by_object_ids(session['cart'].keys())
+    return render_template('cart.html',
+                           cart_entities=cart_entities,
+                           cart_items=session['cart'])
 def get_entities_by_object_ids(object_ids):
-    """Получает полные данные сущностей по ID объектов"""
     if not object_ids:
         return []
-
     conn = get_db_connection()
     cur = conn.cursor()
+    try:
+        placeholders = ','.join(['%s'] * len(object_ids))
+        cur.execute(f"""
+            SELECT 
+                e.id AS entity_id,
+                e.name AS entity_name,
+                c.name AS category,
+                sc.name AS subcategory,
+                ec.id AS characteristic_id,
+                ec.name AS characteristic_name,
+                ec.data_type,
+                ec.unit,
+                o.id AS object_id,
+                o.name AS object_name,
+                ov.value AS characteristic_value
+            FROM objects o
+            JOIN entities e ON o.entity_id = e.id
+            LEFT JOIN object_values ov ON ov.object_id = o.id
+            LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+            LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
+            LEFT JOIN categories c ON sc.category_id = c.id
+            WHERE o.id IN ({placeholders})
+            ORDER BY e.name, o.name;
+        """, tuple(object_ids))
+        results = cur.fetchall()
 
-    placeholders = ','.join(['%s'] * len(object_ids))
-    cur.execute(f"""
-        SELECT 
-            e.id AS entity_id,
-            e.name AS entity_name,
-            c.name AS category,
-            sc.name AS subcategory,
-            ec.id AS characteristic_id,
-            ec.name AS characteristic_name,
-            ec.data_type,
-            ec.unit,
-            o.id AS object_id,
-            o.name AS object_name,
-            ov.value AS characteristic_value
-        FROM objects o
-        JOIN entities e ON o.entity_id = e.id
-        LEFT JOIN object_values ov ON ov.object_id = o.id
-        LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
-        LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
-        LEFT JOIN categories c ON sc.category_id = c.id
-        WHERE o.id IN ({placeholders})
-        ORDER BY e.name, o.name;
-    """, tuple(object_ids))
-
-    results = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    # Группируем данные как в get_all_data()
-    grouped_data = {}
-    for row in results:
-        entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
-        if entity_id not in grouped_data:
-            grouped_data[entity_id] = {
-                'id': entity_id,
-                'name': entity_name,
-                'category': category if category else '',
-                'subcategory': subcategory if subcategory else '',
-                'objects': {},
-                'characteristics': {}
-            }
-
-        if obj_id not in grouped_data[entity_id]['objects']:
-            grouped_data[entity_id]['objects'][obj_id] = {
-                'id': obj_id,
-                'name': obj_name,
-                'characteristics_info': {}
-            }
-
-        if char_id:
-            grouped_data[entity_id]['characteristics'][char_id] = {
-                'id': char_id,
-                'name': char_name,
-                'data_type': data_type if data_type else '',
-                'unit': unit if unit else ''
-            }
-
-            if char_value:
-                grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
+        grouped_data = {}
+        for row in results:
+            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
+            if entity_id not in grouped_data:
+                grouped_data[entity_id] = {
+                    'id': entity_id,
+                    'name': entity_name,
+                    'category': category if category else '',
+                    'subcategory': subcategory if subcategory else '',
+                    'objects': {},
+                    'characteristics': {}
+                }
+            if obj_id not in grouped_data[entity_id]['objects']:
+                grouped_data[entity_id]['objects'][obj_id] = {
+                    'id': obj_id,
+                    'name': obj_name,
+                    'characteristics_info': {}
+                }
+            if char_id:
+                grouped_data[entity_id]['characteristics'][char_id] = {
+                    'id': char_id,
                     'name': char_name,
-                    'value': char_value,
+                    'data_type': data_type if data_type else '',
                     'unit': unit if unit else ''
                 }
+                if char_value:
+                    grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
+                        'name': char_name,
+                        'value': char_value,
+                        'unit': unit if unit else ''
+                    }
 
-    return [{'id': e['id'], 'name': e['name'], 'category': e['category'],
-             'subcategory': e['subcategory'], 'objects': list(e['objects'].values()),
-             'characteristics': list(e['characteristics'].values())}
-            for e in grouped_data.values()]
-
+        return [{'id': e['id'], 'name': e['name'], 'category': e['category'],
+                 'subcategory': e['subcategory'], 'objects': list(e['objects'].values()),
+                 'characteristics': list(e['characteristics'].values())}
+                for e in grouped_data.values()]
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

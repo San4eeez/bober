@@ -10,10 +10,11 @@
     <header>
         <nav>
             <a href="/" class="nav-button">Главная</a>
-            <a href="/cart" class="nav-button">Корзина (<span id="cart-counter">{{ session.get('cart', [])|length }}</span>)</a>
+            <a href="/cart" class="nav-button">
+                Корзина (<span id="cart-counter">{{ session.get('cart', {}).values()|sum }}</span>)
+            </a>
         </nav>
     </header>
-
     <div class="container">
         <!-- Боковая панель категорий -->
         <div class="categories-sidebar">
@@ -36,24 +37,24 @@
             </div>
             {% endfor %}
         </div>
-
         <!-- Блок фильтров -->
         <div class="filters-section">
             <h3>Фильтры</h3>
             <form id="filters-form">
                 <div id="filters-container"></div>
                 <button type="button" onclick="applyFilters()">Применить фильтры</button>
+                <button type="button" onclick="clearFilters()">Очистить фильтры</button>
             </form>
         </div>
-
         <!-- Основной контент -->
         <div class="main-content">
-            {% block content %}
-            <!-- Содержимое будет переопределено в дочерних шаблонах -->
-            {% endblock %}
+            <div id="all-data">
+                {% block content %}
+                <!-- Содержимое будет переопределено в дочерних шаблонах -->
+                {% endblock %}
+            </div>
         </div>
     </div>
-
     <script>
         // Функция для сворачивания/разворачивания подкатегорий
         function toggleCategory(element) {
@@ -68,7 +69,7 @@
 
         // Загрузка фильтров для единственной сущности при загрузке страницы
         document.addEventListener('DOMContentLoaded', function () {
-            const selectedEntity = "{{ entities[0].name if entities else '' }}";
+            const selectedEntity = "{{ entities[0].name if entities else '' }}"; // Имя единственной сущности
             if (selectedEntity) {
                 loadFiltersForEntity(selectedEntity);
             }
@@ -86,8 +87,7 @@
         // Заполнение формы фильтрами
         function populateFilters(characteristics) {
             const container = document.getElementById('filters-container');
-            container.innerHTML = '';
-
+            container.innerHTML = ''; // Очищаем контейнер
             characteristics.forEach(charName => {
                 const div = document.createElement('div');
                 div.innerHTML = `
@@ -97,7 +97,7 @@
                     </select>
                 `;
                 container.appendChild(div);
-
+                // Загружаем уникальные значения для характеристики
                 fetch(`/get_characteristic_values?entity_name=${encodeURIComponent("{{ entities[0].name if entities else '' }}")}&characteristic_name=${encodeURIComponent(charName)}`)
                     .then(res => res.json())
                     .then(values => {
@@ -119,10 +119,8 @@
                 alert('Сущность не найдена.');
                 return;
             }
-
             const selects = document.querySelectorAll('#filters-container select');
             const filters = {};
-
             selects.forEach(select => {
                 const charName = select.getAttribute('data-char');
                 const value = select.value.trim();
@@ -130,12 +128,10 @@
                     filters[charName] = value;
                 }
             });
-
             if (Object.keys(filters).length === 0) {
                 alert('Пожалуйста, укажите хотя бы один фильтр.');
                 return;
             }
-
             fetch('/filter_by_params', {
                 method: 'POST',
                 headers: {
@@ -149,21 +145,27 @@
                 });
         }
 
+        // Очистка фильтров
+        function clearFilters() {
+            const selects = document.querySelectorAll('#filters-container select');
+            selects.forEach(select => {
+                select.value = '';
+            });
+            applyFilters(); // Применяем пустые фильтры вместо перезагрузки страницы
+        }
+
         // Обновление DOM с отфильтрованными данными
         function updatePageWithFilteredData(filteredEntities) {
             const allDataDiv = document.getElementById('all-data');
-            if (!allDataDiv) return;
-            
-            allDataDiv.innerHTML = '';
-
+            allDataDiv.innerHTML = ''; // Очищаем текущие данные
             if (filteredEntities.length === 0) {
                 allDataDiv.innerHTML = '<p>Ничего не найдено</p>';
                 return;
             }
-
             filteredEntities.forEach(entity => {
                 const entityDiv = document.createElement('div');
                 entityDiv.className = 'entity';
+                // Заголовок сущности с ссылкой на категорию и подкатегорию
                 entityDiv.innerHTML = `
                     <div class="entity-header">
                         <h2 class="entity-name">${entity.name}</h2>
@@ -174,21 +176,19 @@
                             </a>
                         </div>
                     </div>
-                    <div class="objects-list"></div>
                 `;
-
-                const objectsList = entityDiv.querySelector('.objects-list');
+                // Список объектов
+                const objectsList = document.createElement('div');
+                objectsList.className = 'objects-list';
                 entity.objects.forEach(obj => {
                     const objectDiv = document.createElement('div');
                     objectDiv.className = 'object';
                     objectDiv.innerHTML = `
                         <div class="object-header">
                             <h3 class="object-name">${obj.name}</h3>
-                            <button class="add-to-cart" data-object-id="${obj.id}">В корзину</button>
                         </div>
                         <div class="properties-list"></div>
                     `;
-
                     const propertiesList = objectDiv.querySelector('.properties-list');
                     for (const [charId, charInfo] of Object.entries(obj.characteristics_info)) {
                         const propertyDiv = document.createElement('div');
@@ -197,65 +197,67 @@
                             <div class="property-name">${charInfo.name}</div>
                             <div class="property-value">
                                 ${charInfo.value.startsWith('http') ? `<a href="${charInfo.value}" target="_blank">${charInfo.value}</a>` : charInfo.value}
-                                ${charInfo.unit ? `<span class="unit">${charInfo.unit}</span>` : ''}
                             </div>
                         `;
                         propertiesList.appendChild(propertyDiv);
                     }
-
                     objectsList.appendChild(objectDiv);
                 });
-
+                entityDiv.appendChild(objectsList);
                 allDataDiv.appendChild(entityDiv);
             });
         }
 
         // Обработка корзины
-        document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('add-to-cart')) {
-                const objectId = e.target.getAttribute('data-object-id');
-                
-                fetch('/add_to_cart', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ object_id: objectId })
-                })
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCartCounter();
+        });
+
+        function updateCartCounter() {
+            fetch('/cart_count')
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        document.getElementById('cart-counter').textContent = data.cart_count;
-                        showNotification('Товар добавлен в корзину');
+                        document.getElementById('cart-counter').textContent = data.count;
                     }
                 });
+        }
+
+        document.addEventListener('click', function(e) {
+            // Управление количеством
+            if (e.target.classList.contains('quantity-btn')) {
+                const btn = e.target;
+                const container = btn.closest('.quantity-controls');
+                const quantityElement = container.querySelector('.quantity');
+                let quantity = parseInt(quantityElement.textContent);
+                if (btn.classList.contains('minus') && quantity > 1) {
+                    quantity--;
+                } else if (btn.classList.contains('plus')) {
+                    quantity++;
+                }
+                quantityElement.textContent = quantity;
+                // Если на странице корзины - сразу обновляем
+                if (window.location.pathname === '/cart') {
+                    const objectId = btn.getAttribute('data-object-id');
+                    updateCartItem(objectId, quantity);
+                }
             }
-            
+
+            // Добавление в корзину
+            if (e.target.classList.contains('add-to-cart')) {
+                const btn = e.target;
+                const objectId = btn.getAttribute('data-object-id');
+                const quantity = parseInt(btn.closest('.object-actions').querySelector('.quantity').textContent);
+                addToCart(objectId, quantity);
+            }
+
+            // Удаление из корзины
             if (e.target.classList.contains('remove-from-cart')) {
                 const objectId = e.target.getAttribute('data-object-id');
-                
-                fetch('/remove_from_cart', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ object_id: objectId })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('cart-counter').textContent = data.cart_count;
-                        e.target.closest('.object').remove();
-                        showNotification('Товар удалён из корзины');
-                        
-                        if (data.cart_count == 0) {
-                            setTimeout(() => location.reload(), 1000);
-                        }
-                    }
-                });
+                removeFromCart(objectId);
             }
         });
-        
+
         // Очистка корзины
         const clearCartBtn = document.getElementById('clear-cart');
         if (clearCartBtn) {
@@ -273,13 +275,76 @@
                 }
             });
         }
-        
+
+        // Функции для работы с API
+        function addToCart(objectId, quantity) {
+            fetch('/add_to_cart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    object_id: objectId,
+                    quantity: quantity
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    updateCartCounter();
+                    showNotification(`Добавлено ${quantity} шт. в корзину`);
+                }
+            });
+        }
+
+        function removeFromCart(objectId) {
+            fetch('/remove_from_cart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ object_id: objectId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    updateCartCounter();
+                    const itemElement = document.querySelector(`.object[data-object-id="${objectId}"]`);
+                    if (itemElement) {
+                        itemElement.remove();
+                        showNotification('Товар удалён из корзины');
+                    }
+                    if (data.cart_count === 0) {
+                        setTimeout(() => location.reload(), 1000);
+                    }
+                }
+            });
+        }
+
+        function updateCartItem(objectId, quantity) {
+            fetch('/update_cart_quantity', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    object_id: objectId,
+                    quantity: quantity
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    updateCartCounter();
+                }
+            });
+        }
+
         function showNotification(message) {
             const notification = document.createElement('div');
             notification.className = 'notification';
             notification.textContent = message;
             document.body.appendChild(notification);
-            
             setTimeout(() => {
                 notification.remove();
             }, 2000);

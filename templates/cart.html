@@ -5,12 +5,23 @@
     <h1>Ваша корзина</h1>
 
     {% if not cart_entities %}
-        <p>Ваша корзина пуста</p>
+        <div class="empty-cart-message">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M22 9h-4.8l-1.2-4H5v2h10.6l1.2 4H22v2H6v2h12v2H6v2h14v-8zM5 6V4c0-1.1-.9-2-2-2s-2 .9-2 2v2h2zm-4 8v2h2v-2H1zm0-4v2h2v-2H1zm0-4v2h2V6H1z"/>
+            </svg>
+            <h2>Ваша корзина пуста</h2>
+            <p>Добавьте товары из каталога</p>
+            <a href="/">Перейти в каталог</a>
+        </div>
     {% else %}
         <div id="cart-items">
             {% for entity in cart_entities %}
                 {% include '_entity.html' %}
             {% endfor %}
+        </div>
+
+        <div class="cart-summary">
+            <p>Общее количество товаров: <span id="total-quantity">{{ cart_items.values()|sum }}</span></p>
         </div>
 
         <div class="cart-actions">
