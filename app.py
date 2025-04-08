@@ -431,6 +431,16 @@ def remove_from_cart():
         'cart_count': sum(session.get('cart', {}).values())
     })
 
+@app.route('/clear_cart', methods=['POST'])
+def clear_cart():
+    if 'cart' in session:
+        session.pop('cart')
+        session.modified = True
+    return jsonify({
+        'success': True,
+        'cart_count': 0
+    })
+
 @app.route('/update_cart_quantity', methods=['POST'])
 def update_cart_quantity():
     object_id = request.json.get('object_id')
