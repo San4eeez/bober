@@ -147,11 +147,7 @@
 
         // Очистка фильтров
         function clearFilters() {
-            const selects = document.querySelectorAll('#filters-container select');
-            selects.forEach(select => {
-                select.value = '';
-            });
-            applyFilters(); // Применяем пустые фильтры вместо перезагрузки страницы
+           location.reload();  // Применяем пустые фильтры вместо перезагрузки страницы
         }
 
         // Обновление DOM с отфильтрованными данными
