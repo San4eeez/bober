@@ -100,7 +100,7 @@ body {
 .subcategory-list {
     padding-left: 15px;
     margin-top: 5px;
-    display: none;
+
 }
 
 .category-item.active .subcategory-list {
@@ -288,7 +288,7 @@ body {
 
 /* Стили для поиска */
 #search-results {
-    display: none;
+
     background: white;
     border-radius: var(--border-radius);
     box-shadow: var(--box-shadow);
