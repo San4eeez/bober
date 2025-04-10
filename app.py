@@ -1,6 +1,13 @@
 # app.py
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import psycopg2
+from flask import Flask, render_template, request, jsonify, send_file
+import psycopg2
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+import io
+
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
@@ -66,6 +73,64 @@ def filter_entities_by_default(category, subcategory):
     finally:
         cur.close()
         conn.close()
+
+
+@app.route('/export_cart')
+def export_cart():
+    """Экспортирует товары из корзины в XLSX-файл."""
+    if 'cart' not in session or not session['cart']:
+        return "Корзина пуста"
+
+    cart_entities = get_entities_by_object_ids(session['cart'].keys())
+
+    # Создание нового workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Корзина"
+
+    # Добавление шапки (4 строки)
+    headers = [
+        ['№', 'Наименование ККН', 'ОКПД2', 'Детализация', 'Единица измерения ККН', 'Показатель (характеристика) товара', 'Требования к значениям показателей', '', '', '', 'Единица измерения характеристики', 'Категория', 'Код КТРУ', 'Код ККН', 'Товарная часть', 'Дата актуализации', 'Российский товар'],
+        ['', '', '', '', '', 'Минимальное значение показателя и/или максимальное значение показателя', '', 'Показатели (характеристики), для которых указаны варианты значений', 'Показатели, значения которых не могут изменяться', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '≥ (не менее)', '≤ (не более)', '', '', '', '', '', '', '', '', ''],
+        ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17']
+    ]
+
+    for row in headers:
+        ws.append(row)
+
+    # Добавление данных товаров из корзины
+    row_num = 5  # Начинаем с 5 строки после шапки
+    for entity in cart_entities:
+        for obj in entity['objects']:
+            # Добавляем основные данные товара
+            ws.cell(row=row_num, column=1, value=row_num - 4)  # №
+            ws.cell(row=row_num, column=2, value=obj['name'])  # Наименование ККН
+            ws.cell(row=row_num, column=3, value=entity['category'])  # Категория
+            ws.cell(row=row_num, column=4, value=entity['subcategory'])  # Подкатегория
+            ws.cell(row=row_num, column=5, value='')  # Детализация (пустое поле)
+            ws.cell(row=row_num, column=6, value='')  # Единица измерения ККН (пустое поле)
+            ws.cell(row=row_num, column=12, value=entity['category'])  # Категория
+            ws.cell(row=row_num, column=16, value='')  # Дата актуализации (пустое поле)
+            ws.cell(row=row_num, column=17, value='')  # Российский товар (пустое поле)
+
+            # Добавляем характеристики товара
+            for char_id, char_info in obj['characteristics_info'].items():
+                ws.cell(row=row_num, column=7, value=char_info['name'])  # Показатель (характеристика) товара
+                ws.cell(row=row_num, column=8, value=char_info['value'])  # Требования к значениям показателей
+                ws.cell(row=row_num, column=11, value=char_info['unit'])  # Единица измерения характеристики
+                row_num += 1
+
+            row_num += 1  # Пустая строка между объектами
+
+    # Сохранение файла
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    # Отправка файла на скачивание
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', download_name='cart_export.xlsx')
+
 
 @app.route('/')
 def index():
