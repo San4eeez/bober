@@ -1,13 +1,10 @@
 # app.py
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-import psycopg2
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import psycopg2
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 import io
-
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
@@ -55,7 +52,6 @@ def filter_entities_by_default(category, subcategory):
                     'count': count
                 })
                 categories_data[cat]['count'] += count
-
         # Получаем отфильтрованные сущности
         cur.execute("""
             SELECT e.id
@@ -74,20 +70,16 @@ def filter_entities_by_default(category, subcategory):
         cur.close()
         conn.close()
 
-
 @app.route('/export_cart')
 def export_cart():
     """Экспортирует товары из корзины в XLSX-файл."""
     if 'cart' not in session or not session['cart']:
         return "Корзина пуста"
-
     cart_entities = get_entities_by_object_ids(session['cart'].keys())
-
     # Создание нового workbook
     wb = Workbook()
     ws = wb.active
     ws.title = "Корзина"
-
     # Добавление шапки (4 строки)
     headers = [
         ['№', 'Наименование ККН', 'ОКПД2', 'Детализация', 'Единица измерения ККН', 'Показатель (характеристика) товара', 'Требования к значениям показателей', '', '', '', 'Единица измерения характеристики', 'Категория', 'Код КТРУ', 'Код ККН', 'Товарная часть', 'Дата актуализации', 'Российский товар'],
@@ -95,10 +87,8 @@ def export_cart():
         ['', '', '', '', '', '≥ (не менее)', '≤ (не более)', '', '', '', '', '', '', '', '', ''],
         ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17']
     ]
-
     for row in headers:
         ws.append(row)
-
     # Добавление данных товаров из корзины
     row_num = 5  # Начинаем с 5 строки после шапки
     for entity in cart_entities:
@@ -113,24 +103,20 @@ def export_cart():
             ws.cell(row=row_num, column=12, value=entity['category'])  # Категория
             ws.cell(row=row_num, column=16, value='')  # Дата актуализации (пустое поле)
             ws.cell(row=row_num, column=17, value='')  # Российский товар (пустое поле)
-
             # Добавляем характеристики товара
             for char_id, char_info in obj['characteristics_info'].items():
                 ws.cell(row=row_num, column=7, value=char_info['name'])  # Показатель (характеристика) товара
                 ws.cell(row=row_num, column=8, value=char_info['value'])  # Требования к значениям показателей
+                ws.cell(row=row_num, column=9, value=char_info['additional_value'])  # Дополнительное значение
                 ws.cell(row=row_num, column=11, value=char_info['unit'])  # Единица измерения характеристики
                 row_num += 1
-
             row_num += 1  # Пустая строка между объектами
-
     # Сохранение файла
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-
     # Отправка файла на скачивание
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', download_name='cart_export.xlsx')
-
 
 @app.route('/')
 def index():
@@ -165,11 +151,9 @@ def index():
                 first_category = category
             if first_subcategory is None and subcategory:
                 first_subcategory = subcategory
-
         # Если найдена первая категория и подкатегория, перенаправляем на них
         if first_category and first_subcategory:
             return filter_entities_by_default(first_category, first_subcategory)
-
         # Если категорий нет, показываем пустую страницу
         entities = get_all_data()
         return render_template('index.html',
@@ -207,7 +191,6 @@ def filter_entities():
                     'count': count
                 })
                 categories_data[cat]['count'] += count
-
         # Получаем отфильтрованные сущности
         cur.execute("""
             SELECT e.id
@@ -243,6 +226,7 @@ def search():
                 ec.id AS characteristic_id,
                 ec.name AS characteristic_name,
                 ov.value AS characteristic_value,
+                ov.additional_value AS additional_characteristic_value,
                 c.name AS category_name,
                 sc.name AS subcategory_name
             FROM objects o
@@ -255,11 +239,10 @@ def search():
             ORDER BY e.name, o.name;
         """, (f"%{query}%", f"%{query}%"))
         results = cur.fetchall()
-
         # Группируем данные по сущностям и объектам
         grouped_data = {}
         for row in results:
-            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value, category_name, subcategory_name = row
+            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value, additional_char_value, category_name, subcategory_name = row
             if entity_id not in grouped_data:
                 grouped_data[entity_id] = {
                     'id': entity_id,
@@ -274,12 +257,13 @@ def search():
                     'name': object_name,
                     'characteristics_info': {}
                 }
-            if char_id and char_name and char_value:
+            if char_id and (char_value or additional_char_value):
                 grouped_data[entity_id]['objects'][object_id]['characteristics_info'][char_id] = {
                     'name': char_name,
-                    'value': char_value
+                    'value': char_value if char_value is not None else additional_char_value,
+                    'additional_value': additional_char_value if additional_char_value is not None else None,
+                    'unit': unit if unit else ''
                 }
-
         # Преобразуем данные в список
         entities = []
         for entity_data in grouped_data.values():
@@ -364,11 +348,9 @@ def filter_by_params():
             params.extend([char_name, value])
         cur.execute(query, params)
         filtered_object_ids = [row[0] for row in cur.fetchall()]
-
         # Если нет подходящих объектов, возвращаем пустой список
         if not filtered_object_ids:
             return jsonify([])
-
         # 2. Получаем полные данные для отфильтрованных объектов
         all_entities = get_all_data()
         filtered_entities = []
@@ -410,7 +392,8 @@ def get_all_data():
                 ec.unit,
                 o.id AS object_id,
                 o.name AS object_name,
-                ov.value AS characteristic_value
+                ov.value AS characteristic_value,
+                ov.additional_value AS additional_characteristic_value
             FROM entities e
             LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
             LEFT JOIN categories c ON sc.category_id = c.id
@@ -420,11 +403,10 @@ def get_all_data():
             ORDER BY e.name, o.name;
         """)
         results = cur.fetchall()
-
         # Группируем данные
         grouped_data = {}
         for row in results:
-            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
+            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value, additional_char_value = row
             if entity_id not in grouped_data:
                 grouped_data[entity_id] = {
                     'id': entity_id,
@@ -447,13 +429,13 @@ def get_all_data():
                     'data_type': data_type if data_type else '',
                     'unit': unit if unit else ''
                 }
-                if obj_id and char_value:
+                if obj_id and (char_value or additional_char_value):
                     grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
                         'name': char_name,
-                        'value': char_value,
+                        'value': char_value if char_value is not None else additional_char_value,
+                        'additional_value': additional_char_value if additional_char_value is not None else None,
                         'unit': unit if unit else ''
                     }
-
         # Преобразуем данные в список
         result = []
         for entity_data in grouped_data.values():
@@ -533,6 +515,7 @@ def view_cart():
     return render_template('cart.html',
                            cart_entities=cart_entities,
                            cart_items=session['cart'])
+
 def get_entities_by_object_ids(object_ids):
     if not object_ids:
         return []
@@ -552,7 +535,8 @@ def get_entities_by_object_ids(object_ids):
                 ec.unit,
                 o.id AS object_id,
                 o.name AS object_name,
-                ov.value AS characteristic_value
+                ov.value AS characteristic_value,
+                ov.additional_value AS additional_characteristic_value
             FROM objects o
             JOIN entities e ON o.entity_id = e.id
             LEFT JOIN object_values ov ON ov.object_id = o.id
@@ -563,10 +547,9 @@ def get_entities_by_object_ids(object_ids):
             ORDER BY e.name, o.name;
         """, tuple(object_ids))
         results = cur.fetchall()
-
         grouped_data = {}
         for row in results:
-            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value = row
+            entity_id, entity_name, category, subcategory, char_id, char_name, data_type, unit, obj_id, obj_name, char_value, additional_char_value = row
             if entity_id not in grouped_data:
                 grouped_data[entity_id] = {
                     'id': entity_id,
@@ -589,13 +572,13 @@ def get_entities_by_object_ids(object_ids):
                     'data_type': data_type if data_type else '',
                     'unit': unit if unit else ''
                 }
-                if char_value:
+                if obj_id and (char_value or additional_char_value):
                     grouped_data[entity_id]['objects'][obj_id]['characteristics_info'][char_id] = {
                         'name': char_name,
-                        'value': char_value,
+                        'value': char_value if char_value is not None else additional_char_value,
+                        'additional_value': additional_char_value if additional_char_value is not None else None,
                         'unit': unit if unit else ''
                     }
-
         return [{'id': e['id'], 'name': e['name'], 'category': e['category'],
                  'subcategory': e['subcategory'], 'objects': list(e['objects'].values()),
                  'characteristics': list(e['characteristics'].values())}
