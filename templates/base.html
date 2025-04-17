@@ -147,7 +147,7 @@
 
         // Очистка фильтров
         function clearFilters() {
-           location.reload();  // Применяем пустые фильтры вместо перезагрузки страницы
+            location.reload();  // Применяем пустые фильтры вместо перезагрузки страницы
         }
 
         // Обновление DOM с отфильтрованными данными
@@ -238,7 +238,6 @@
                     updateCartItem(objectId, quantity);
                 }
             }
-
             // Добавление в корзину
             if (e.target.classList.contains('add-to-cart')) {
                 const btn = e.target;
@@ -246,7 +245,6 @@
                 const quantity = parseInt(btn.closest('.object-actions').querySelector('.quantity').textContent);
                 addToCart(objectId, quantity);
             }
-
             // Удаление из корзины
             if (e.target.classList.contains('remove-from-cart')) {
                 const objectId = e.target.getAttribute('data-object-id');
@@ -345,6 +343,29 @@
                 notification.remove();
             }, 2000);
         }
+
+        // Логика для генерации таблицы
+        document.getElementById('generate-table').addEventListener('click', function() {
+            fetch('/generate_table', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cart_items: {{ session['cart']|tojson }}
+                })
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'filtered_part.xlsx';
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(error => console.error('Error generating table:', error));
+        });
     </script>
 </body>
 </html>
