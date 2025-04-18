@@ -345,27 +345,30 @@
         }
 
         // Логика для генерации таблицы
-        document.getElementById('generate-table').addEventListener('click', function() {
-            fetch('/generate_table', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    cart_items: {{ session['cart']|tojson }}
+        const generateTableBtn = document.getElementById('generate-table');
+        if (generateTableBtn) {
+            generateTableBtn.addEventListener('click', function() {
+                fetch('/generate_table', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        cart_items: {{ session.get('cart', {})|tojson }}
+                    })
                 })
-            })
-            .then(response => response.blob())
-            .then(blob => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'filtered_part.xlsx';
-                a.click();
-                URL.revokeObjectURL(url);
-            })
-            .catch(error => console.error('Error generating table:', error));
-        });
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'filtered_part.xlsx';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                })
+                .catch(error => console.error('Error generating table:', error));
+            });
+        }
     </script>
 </body>
 </html>
