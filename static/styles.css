@@ -662,6 +662,31 @@ nav {
     background: var(--primary-dark);
 }
 
+/* Стиль для кнопки */
+.btn {
+
+    display: inline-block;
+    padding: 10px 20px;
+    margin-top: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: #007BFF; /* Синий цвет */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+    background-color: #0056b3; /* Темно-синий цвет при наведении */
+}
+
+.btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Эффект фокуса */
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .container {

@@ -1,13 +1,10 @@
-# app.py
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-import psycopg2
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import psycopg2
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 import io
-
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
@@ -36,7 +33,7 @@ def filter_entities_by_default(category, subcategory):
     try:
         # Получаем категории для боковой панели
         cur.execute("""
-            SELECT c.name as category, sc.name as subcategory, 
+            SELECT c.name as category, sc.name as subcategory,
                    COUNT(DISTINCT o.id) as object_count
             FROM categories c
             LEFT JOIN subcategories sc ON c.id = sc.category_id
@@ -73,10 +70,6 @@ def filter_entities_by_default(category, subcategory):
     finally:
         cur.close()
         conn.close()
-
-
-
-import logging
 
 logging.basicConfig(level=logging.INFO)
 
@@ -163,15 +156,6 @@ def generate_table():
 
     return send_file(output, as_attachment=True, download_name='filtered_part.xlsx')
 
-
-
-
-
-
-
-
-
-
 @app.route('/')
 def index():
     conn = get_db_connection()
@@ -179,7 +163,7 @@ def index():
     try:
         # Получаем все категории и подкатегории с количеством объектов
         cur.execute("""
-            SELECT c.name as category, sc.name as subcategory, 
+            SELECT c.name as category, sc.name as subcategory,
                    COUNT(DISTINCT o.id) as object_count
             FROM categories c
             LEFT JOIN subcategories sc ON c.id = sc.category_id
@@ -228,7 +212,7 @@ def filter_entities():
     try:
         # Получаем категории для боковой панели
         cur.execute("""
-            SELECT c.name as category, sc.name as subcategory, 
+            SELECT c.name as category, sc.name as subcategory,
                    COUNT(DISTINCT o.id) as object_count
             FROM categories c
             LEFT JOIN subcategories sc ON c.id = sc.category_id
@@ -266,75 +250,104 @@ def filter_entities():
         cur.close()
         conn.close()
 
-@app.route('/search')
+@app.route('/search', methods=['GET', 'POST'])
 def search():
-    query = request.args.get('q', '').strip()
-    if not query:
-        return jsonify([])
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT 
-                e.id AS entity_id,
-                e.name AS entity_name,
-                o.id AS object_id,
-                o.name AS object_name,
-                ec.id AS characteristic_id,
-                ec.name AS characteristic_name,
-                ov.value AS characteristic_value,
-                c.name AS category_name,
-                sc.name AS subcategory_name
-            FROM objects o
-            JOIN entities e ON o.entity_id = e.id
-            LEFT JOIN object_values ov ON ov.object_id = o.id
-            LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
-            LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
-            LEFT JOIN categories c ON sc.category_id = c.id
-            WHERE o.name ILIKE %s OR e.name ILIKE %s
-            ORDER BY e.name, o.name;
-        """, (f"%{query}%", f"%{query}%"))
-        results = cur.fetchall()
+    if request.method == 'POST':
+        query = request.form.get('q', '').strip()
+        if not query:
+            return redirect(url_for('index'))
 
-        # Группируем данные по сущностям и объектам
-        grouped_data = {}
-        for row in results:
-            entity_id, entity_name, object_id, object_name, char_id, char_name, char_value, category_name, subcategory_name = row
-            if entity_id not in grouped_data:
-                grouped_data[entity_id] = {
-                    'id': entity_id,
-                    'name': entity_name,
-                    'category': category_name if category_name else '',
-                    'subcategory': subcategory_name if subcategory_name else '',
-                    'objects': {}
-                }
-            if object_id not in grouped_data[entity_id]['objects']:
-                grouped_data[entity_id]['objects'][object_id] = {
-                    'id': object_id,
-                    'name': object_name,
-                    'characteristics_info': {}
-                }
-            if char_id and char_name and char_value:
-                grouped_data[entity_id]['objects'][object_id]['characteristics_info'][char_id] = {
-                    'name': char_name,
-                    'value': char_value
-                }
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT
+                    e.id AS entity_id,
+                    e.name AS entity_name,
+                    o.id AS object_id,
+                    o.name AS object_name,
+                    ec.id AS characteristic_id,
+                    ec.name AS characteristic_name,
+                    ov.value AS characteristic_value,
+                    c.name AS category_name,
+                    sc.name AS subcategory_name
+                FROM objects o
+                JOIN entities e ON o.entity_id = e.id
+                LEFT JOIN object_values ov ON ov.object_id = o.id
+                LEFT JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
+                LEFT JOIN subcategories sc ON e.subcategory_id = sc.id
+                LEFT JOIN categories c ON sc.category_id = c.id
+                WHERE o.name ILIKE %s OR e.name ILIKE %s
+                ORDER BY e.name, o.name;
+            """, (f"%{query}%", f"%{query}%"))
+            results = cur.fetchall()
 
-        # Преобразуем данные в список
-        entities = []
-        for entity_data in grouped_data.values():
-            entity = {
-                'id': entity_data['id'],
-                'name': entity_data['name'],
-                'category': entity_data['category'],
-                'subcategory': entity_data['subcategory'],
-                'objects': list(entity_data['objects'].values())
-            }
-            entities.append(entity)
-        return jsonify(entities)
-    finally:
-        cur.close()
-        conn.close()
+            # Группируем данные по сущностям и объектам
+            grouped_data = {}
+            for row in results:
+                entity_id, entity_name, object_id, object_name, char_id, char_name, char_value, category_name, subcategory_name = row
+                if entity_id not in grouped_data:
+                    grouped_data[entity_id] = {
+                        'id': entity_id,
+                        'name': entity_name,
+                        'category': category_name if category_name else '',
+                        'subcategory': subcategory_name if subcategory_name else '',
+                        'objects': {}
+                    }
+                if object_id not in grouped_data[entity_id]['objects']:
+                    grouped_data[entity_id]['objects'][object_id] = {
+                        'id': object_id,
+                        'name': object_name,
+                        'characteristics_info': {}
+                    }
+                if char_id and char_name and char_value:
+                    grouped_data[entity_id]['objects'][object_id]['characteristics_info'][char_id] = {
+                        'name': char_name,
+                        'value': char_value
+                    }
+
+            # Преобразуем данные в список
+            entities = []
+            for entity_data in grouped_data.values():
+                entity = {
+                    'id': entity_data['id'],
+                    'name': entity_data['name'],
+                    'category': entity_data['category'],
+                    'subcategory': entity_data['subcategory'],
+                    'objects': list(entity_data['objects'].values())
+                }
+                entities.append(entity)
+
+            # Получаем категории для боковой панели
+            cur.execute("""
+                SELECT c.name as category, sc.name as subcategory,
+                       COUNT(DISTINCT o.id) as object_count
+                FROM categories c
+                LEFT JOIN subcategories sc ON c.id = sc.category_id
+                LEFT JOIN entities e ON e.subcategory_id = sc.id
+                LEFT JOIN objects o ON o.entity_id = e.id
+                GROUP BY c.name, sc.name
+                ORDER BY c.name, sc.name
+            """)
+            categories_data = {}
+            for cat, subcat, count in cur.fetchall():
+                if cat not in categories_data:
+                    categories_data[cat] = {'count': 0, 'subcategories': []}
+                if subcat:
+                    categories_data[cat]['subcategories'].append({
+                        'name': subcat,
+                        'count': count
+                    })
+                    categories_data[cat]['count'] += count
+
+            return render_template('index.html',
+                                   categories=[{'name': k, **v} for k, v in categories_data.items()],
+                                   entities=entities)
+        finally:
+            cur.close()
+            conn.close()
+    return redirect(url_for('index'))
+
 
 @app.route('/get_characteristics_for_entity')
 def get_characteristics_for_entity():
@@ -344,7 +357,7 @@ def get_characteristics_for_entity():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT ec.name 
+            SELECT ec.name
             FROM entity_characteristics ec
             JOIN entities e ON ec.entity_id = e.id
             WHERE e.name = %s
@@ -439,7 +452,7 @@ def get_all_data():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT 
+            SELECT
                 e.id AS entity_id,
                 e.name AS entity_name,
                 c.name AS category,
@@ -573,6 +586,7 @@ def view_cart():
     return render_template('cart.html',
                            cart_entities=cart_entities,
                            cart_items=session['cart'])
+
 def get_entities_by_object_ids(object_ids):
     if not object_ids:
         return []
@@ -581,7 +595,7 @@ def get_entities_by_object_ids(object_ids):
     try:
         placeholders = ','.join(['%s'] * len(object_ids))
         cur.execute(f"""
-            SELECT 
+            SELECT
                 e.id AS entity_id,
                 e.name AS entity_name,
                 c.name AS category,

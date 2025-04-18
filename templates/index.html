@@ -2,8 +2,11 @@
 
 {% block content %}
 <div class="search-box">
-    <input type="text" id="search-input" placeholder="Поиск по названиям объектов..."
-           value="{{ request.args.get('q', '') }}">
+    <form id="search-form" method="post" action="{{ url_for('search') }}">
+        <input type="text" id="search-input" name="q" placeholder="Поиск по названиям объектов..."
+               value="{{ request.form.get('q', '') }}">
+        <button type="submit" class="btn">Поиск</button>
+    </form>
 </div>
 
 <div id="search-results-container">
@@ -15,81 +18,9 @@
 </div>
 
 <script>
-    document.getElementById('search-input').addEventListener('input', function() {
-        const query = this.value.trim();
-        const resultsContainer = document.getElementById('search-results-container');
-
-        if (query.length > 0) {
-            fetch(`/search?q=${encodeURIComponent(query)}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.length > 0) {
-                        resultsContainer.innerHTML = renderEntities(data);
-                    } else {
-                        resultsContainer.innerHTML = '<p>Ничего не найдено</p>';
-                    }
-                });
-        } else {
-            // При пустом запросе просто очищаем результаты, но не перезагружаем страницу
-            fetch('/')
-                .then(res => res.text())
-                .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const newContent = doc.getElementById('all-data').innerHTML;
-                    document.getElementById('all-data').innerHTML = newContent;
-                });
-        }
+    document.getElementById('search-form').addEventListener('submit', function(event) {
+        event.preventDefault(); // Предотвращаем отправку формы по умолчанию
+        this.submit(); // Отправляем форму
     });
-
-    function renderEntities(entities) {
-        return `
-            <div id="all-data">
-                ${entities.map(entity => `
-                    <div class="entity">
-                        <div class="entity-header">
-                            <h2 class="entity-name">${entity.name}</h2>
-                            <div class="category-link">
-                                Категория:
-                                <a href="/filter?category=${encodeURIComponent(entity.category)}&subcategory=${encodeURIComponent(entity.subcategory)}">
-                                    ${entity.category} > ${entity.subcategory}
-                                </a>
-                            </div>
-                        </div>
-                        <div class="objects-list">
-                            ${entity.objects.map(obj => `
-                                <div class="object" data-object-id="${obj.id}">
-                                    <div class="object-header">
-                                        <h3 class="object-name">${obj.name}</h3>
-                                        <div class="object-actions">
-                                            <div class="quantity-controls">
-                                                <button class="quantity-btn minus" data-object-id="${obj.id}">-</button>
-                                                <span class="quantity">1</span>
-                                                <button class="quantity-btn plus" data-object-id="${obj.id}">+</button>
-                                            </div>
-                                            <button class="add-to-cart" data-object-id="${obj.id}">В корзину</button>
-                                        </div>
-                                    </div>
-                                    <div class="properties-list">
-                                        ${Object.entries(obj.characteristics_info).map(([char_id, char_info]) => `
-                                            <div class="property">
-                                                <div class="property-name">${char_info.name}</div>
-                                                <div class="property-value">
-                                                    ${char_info.value.startsWith('http') ?
-                                                        `<a href="${char_info.value}" target="_blank">${char_info.value}</a>` :
-                                                        char_info.value}
-                                                    ${char_info.unit ? `<span class="unit">${char_info.unit}</span>` : ''}
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
 </script>
 {% endblock %}
