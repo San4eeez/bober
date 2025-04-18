@@ -135,6 +135,26 @@ def generate_table():
         else:
             logging.warning(f"No matching rows found for object name: {name}")
 
+    # Добавление столбца "Количество" после второго столбца
+    result_df.insert(2, "Количество", "")
+
+    # Заполнение столбца "Количество" значениями из корзины
+    for object_id, quantity in cart_items.items():
+        # Получаем имя объекта по его ID
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT o.name FROM objects o WHERE o.id = %s", (object_id,))
+            object_name = cur.fetchone()
+            if object_name:
+                result_df.loc[result_df[1] == object_name[0], "Количество"] = quantity
+        finally:
+            cur.close()
+            conn.close()
+
+    # Добавление заголовка "Количество" в первые 4 строки
+    result_df.iloc[0, 2] = "Количество"
+
     # Сохранение результата в новый файл Excel
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -142,6 +162,11 @@ def generate_table():
     output.seek(0)
 
     return send_file(output, as_attachment=True, download_name='filtered_part.xlsx')
+
+
+
+
+
 
 
 
