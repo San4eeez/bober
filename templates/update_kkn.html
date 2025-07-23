@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Обновить справочник ККН</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="nav-button">Главная</a>
+            <a href="/update_kkn" class="nav-button">Обновить справочник</a>
+            <a href="/cart" class="nav-button">
+                Корзина (<span id="cart-counter">{{ session.get('cart', {}).values()|sum }}</span>)
+            </a>
+        </nav>
+    </header>
+    <div class="container">
+        <h1>Обновить справочник ККН</h1>
+        <button id="update-button">Обновить справочник ККН</button>
+        <div id="update-log">
+            {% if update_log %}
+                <h2>История обновлений:</h2>
+                <pre>{{ update_log }}</pre>
+            {% endif %}
+        </div>
+        <div id="notification" class="notification" style="display: none;"></div>
+    </div>
+    <script>
+        document.getElementById('update-button').addEventListener('click', function() {
+            document.getElementById('notification').style.display = 'none';
+            fetch('/run_updater', {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('notification').textContent = 'Обновление завершено';
+                    document.getElementById('notification').style.display = 'block';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    document.getElementById('notification').textContent = 'Ошибка при обновлении';
+                    document.getElementById('notification').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('notification').textContent = 'Ошибка при обновлении';
+                document.getElementById('notification').style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>
