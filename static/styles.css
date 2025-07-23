@@ -687,6 +687,22 @@ nav {
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Эффект фокуса */
 }
 
+#update-button {
+    width: 200px; /* Ширина кнопки */
+    height: 50px; /* Высота кнопки */
+    font-size: 16px; /* Размер шрифта */
+    padding: 10px; /* Отступы внутри кнопки */
+    background-color: #007bff; /* Цвет фона */
+    color: white; /* Цвет текста */
+    border: none; /* Удаление границы */
+    border-radius: 5px; /* Закругление углов */
+    cursor: pointer; /* Изменение курсора при наведении */
+}
+
+#update-button:hover {
+    background-color: #0056b3; /* Изменение цвета фона при наведении */
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .container {

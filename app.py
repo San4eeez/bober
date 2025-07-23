@@ -674,6 +674,7 @@ def update_kkn():
 def run_updater():
     """Запускает скрипт обновления справочника ККН."""
     try:
+        print("Запустилось обновление, ЖДИ 2 МИНУТЫ")
         result = subprocess.run(['python', 'updater_kkn_list.py'], capture_output=True, text=True)
         if result.returncode == 0:
             return jsonify({'success': True})

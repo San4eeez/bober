@@ -29,6 +29,7 @@
     </div>
     <script>
         document.getElementById('update-button').addEventListener('click', function() {
+            document.getElementById('notification').textContent = 'Началось обновление, ожидай 2 минуты. (ДА, ЦЕЛЫХ ДВЕ МИНУТЫ НИЧЕГО НЕ НАЖИМАЙ)'
             document.getElementById('notification').style.display = 'none';
             fetch('/run_updater', {
                 method: 'POST'
