@@ -5,6 +5,7 @@ from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 import io
 import logging
+import subprocess
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
@@ -657,6 +658,29 @@ def get_entities_by_object_ids(object_ids):
     finally:
         cur.close()
         conn.close()
+
+@app.route('/update_kkn')
+def update_kkn():
+    """Страница для обновления справочника ККН."""
+    update_log = ''
+    try:
+        with open('update_log.txt', 'r') as file:
+            update_log = file.read()
+    except FileNotFoundError:
+        pass
+    return render_template('update_kkn.html', update_log=update_log)
+
+@app.route('/run_updater', methods=['POST'])
+def run_updater():
+    """Запускает скрипт обновления справочника ККН."""
+    try:
+        result = subprocess.run(['python', 'updater_kkn_list.py'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': result.stderr})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

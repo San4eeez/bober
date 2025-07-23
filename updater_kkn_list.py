@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 from datetime import datetime
+import os
 
 # URL страницы, которую вы хотите получить
 url = 'https://www.gz-spb.ru/content/2831'
@@ -42,6 +43,7 @@ try:
         for data in response.iter_content(block_size):
             file.write(data)
             progress_bar.update(len(data))
+    os.system("python import_data.py")
 
     print("Файл успешно загружен")
 
