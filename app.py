@@ -677,6 +677,7 @@ def run_updater():
         print("Запустилось обновление, ЖДИ 2 МИНУТЫ")
         result = subprocess.run(['python', 'updater_kkn_list.py'], capture_output=True, text=True)
         if result.returncode == 0:
+            print("Обновление завершено!")
             return jsonify({'success': True})
         else:
             return jsonify({'success': False, 'error': result.stderr})

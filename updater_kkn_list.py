@@ -43,7 +43,7 @@ try:
         for data in response.iter_content(block_size):
             file.write(data)
             progress_bar.update(len(data))
-    os.system("python3 import_data.py")
+    os.system("python import_data.py")
 
     print("Файл успешно загружен")
 
