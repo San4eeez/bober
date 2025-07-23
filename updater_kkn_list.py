@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+from datetime import datetime
 
 # URL страницы, которую вы хотите получить
 url = 'https://www.gz-spb.ru/content/2831'
@@ -21,8 +22,11 @@ try:
     doc_link = doc_link.get('href')
     doc_link = f'https://www.gz-spb.ru{doc_link}'
 
+    # Получаем текущую дату и время
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     with open('update_log.txt', 'a') as file:
-        file.write(doc_link + '\n')
+        file.write(f"{current_time} - {doc_link}\n")
 
     # Загружаем файл с отображением прогресса
     response = requests.get(doc_link, stream=True, verify=False)
