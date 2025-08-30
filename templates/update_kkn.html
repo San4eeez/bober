@@ -19,6 +19,7 @@
     <div class="container">
         <h1>Обновить справочник ККН</h1>
         <button id="update-button">Обновить справочник ККН</button>
+        <input type="file" id="file-input" accept=".xlsx" />
         <div id="update-log">
             {% if update_log %}
                 <h2>История обновлений:</h2>
@@ -29,10 +30,23 @@
     </div>
     <script>
         document.getElementById('update-button').addEventListener('click', function() {
-            document.getElementById('notification').textContent = 'Началось обновление, ожидай 2 минуты. (ДА, ЦЕЛЫХ ДВЕ МИНУТЫ НИЧЕГО НЕ НАЖИМАЙ)'
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) {
+                document.getElementById('notification').textContent = 'Пожалуйста, выберите файл для загрузки.';
+                document.getElementById('notification').style.display = 'block';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('notification').textContent = 'Началось обновление, ожидай 2 минуты. (ДА, ЦЕЛЫХ ДВЕ МИНУТЫ НИЧЕГО НЕ НАЖИМАЙ)';
             document.getElementById('notification').style.display = 'none';
+
             fetch('/run_updater', {
-                method: 'POST'
+                method: 'POST',
+                body: formData
             })
             .then(res => res.json())
             .then(data => {

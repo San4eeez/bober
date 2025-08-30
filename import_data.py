@@ -3,6 +3,11 @@
 import pandas as pd
 import psycopg2
 from tqdm import tqdm
+import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 DB_CONFIG = {
     'dbname': 'bober',
@@ -11,7 +16,6 @@ DB_CONFIG = {
     'host': 'localhost',
     'port': '5432'
 }
-
 
 def parse_excel(file_path):
     """Анализирует Excel-файл и возвращает структурированные данные"""
@@ -88,7 +92,6 @@ def parse_excel(file_path):
 
     return data
 
-
 def import_to_database(data):
     """Импортирует данные в БД"""
     conn = psycopg2.connect(**DB_CONFIG)
@@ -133,7 +136,7 @@ def import_to_database(data):
             cur.execute("""
                 INSERT INTO entities (name, category, subcategory, subcategory_id)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (name) DO UPDATE 
+                ON CONFLICT (name) DO UPDATE
                 SET category = EXCLUDED.category,
                     subcategory = EXCLUDED.subcategory,
                     subcategory_id = EXCLUDED.subcategory_id
@@ -167,7 +170,7 @@ def import_to_database(data):
 
                 if not obj_id:
                     cur.execute("""
-                        SELECT id FROM objects 
+                        SELECT id FROM objects
                         WHERE entity_id = %s AND name = %s
                     """, (entity_id, obj_name))
                     obj_id = cur.fetchone()[0]
@@ -199,121 +202,6 @@ def import_to_database(data):
     finally:
         cur.close()
         conn.close()
-
-
-def import_to_database(data):
-    """Импортирует данные в БД"""
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-
-    try:
-        # 1. Импорт категорий и подкатегорий
-        categories = set()
-        subcategories = set()
-
-        for entity in data.values():
-            if pd.notna(entity['category']):
-                categories.add((entity['category'],))
-            if pd.notna(entity['subcategory']):
-                subcategories.add((entity['category'], entity['subcategory']))
-
-        # Вставляем категории
-        cur.executemany(
-            "INSERT INTO categories (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
-            categories
-        )
-
-        # Вставляем подкатегории
-        for cat, subcat in subcategories:
-            cur.execute("""
-                INSERT INTO subcategories (category_id, name)
-                SELECT id, %s FROM categories WHERE name = %s
-                ON CONFLICT (category_id, name) DO NOTHING
-            """, (subcat, cat))
-
-        # 2. Импорт сущностей
-        for entity_name, entity_data in tqdm(data.items(), desc="Импорт сущностей"):
-            # Получаем ID подкатегории
-            cur.execute("""
-                SELECT sc.id FROM subcategories sc
-                JOIN categories c ON sc.category_id = c.id
-                WHERE c.name = %s AND sc.name = %s
-            """, (entity_data['category'], entity_data['subcategory']))
-            subcategory_id = cur.fetchone()[0] if cur.rowcount > 0 else None
-
-            # Вставляем сущность
-            cur.execute("""
-                INSERT INTO entities (name, category, subcategory, subcategory_id)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (name) DO UPDATE 
-                SET category = EXCLUDED.category,
-                    subcategory = EXCLUDED.subcategory,
-                    subcategory_id = EXCLUDED.subcategory_id
-                RETURNING id
-            """, (entity_name, entity_data['category'], entity_data['subcategory'], subcategory_id))
-            entity_id = cur.fetchone()[0]
-
-            # 3. Импорт характеристик сущности
-            for char_name, char_data in entity_data['characteristics'].items():
-                cur.execute("""
-                    INSERT INTO entity_characteristics (entity_id, name, data_type, unit)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (entity_id, name) DO UPDATE
-                    SET data_type = EXCLUDED.data_type,
-                        unit = EXCLUDED.unit
-                    RETURNING id
-                """, (entity_id, char_name, char_data.get('data_type'), char_data.get('unit')))
-
-            # 4. Импорт объектов
-            for obj_name, obj_data in entity_data['objects'].items():
-                cur.execute("""
-                    INSERT INTO objects (entity_id, name)
-                    VALUES (%s, %s)
-                    ON CONFLICT (entity_id, name) DO NOTHING
-                    RETURNING id
-                """, (entity_id, obj_name))
-                obj_id = cur.fetchone()[0] if cur.rowcount > 0 else None
-
-                if not obj_id:
-                    cur.execute("""
-                        SELECT id FROM objects 
-                        WHERE entity_id = %s AND name = %s
-                    """, (entity_id, obj_name))
-                    obj_id = cur.fetchone()[0]
-
-                # 5. Импорт значений характеристик
-                for char_name, value in obj_data.items():
-                    cur.execute("""
-                        SELECT id FROM entity_characteristics
-                        WHERE entity_id = %s AND name = %s
-                    """, (entity_id, char_name))
-                    res = cur.fetchone()
-                    if res:
-                        char_id = res[0]
-                        cur.execute("""
-                            INSERT INTO object_values (object_id, characteristic_id, value)
-                            VALUES (%s, %s, %s)
-                            ON CONFLICT (object_id, characteristic_id)
-                            DO UPDATE SET value = EXCLUDED.value
-                        """, (obj_id, char_id, str(value)))
-
-        conn.commit()
-        print("\nИмпорт данных успешно завершен!")
-
-        # Проверка количества записей
-        cur.execute("SELECT COUNT(*) FROM entity_characteristics")
-        print(f"Характеристик импортировано: {cur.fetchone()[0]}")
-        cur.execute("SELECT COUNT(*) FROM object_values")
-        print(f"Значений характеристик импортировано: {cur.fetchone()[0]}")
-
-    except Exception as e:
-        conn.rollback()
-        print(f"\nОшибка при импорте: {e}")
-        raise
-    finally:
-        cur.close()
-        conn.close()
-
 
 def init_database():
     """Инициализирует структуру базы данных"""
@@ -393,14 +281,17 @@ def init_database():
         cur.close()
         conn.close()
 
-
 if __name__ == '__main__':
     # 1. Инициализация БД
     print("Инициализация структуры БД...")
     init_database()
 
     # 2. Импорт данных из Excel
-    file_path = 'doc.xlsx'  # Укажите путь к вашему файлу
+    if len(sys.argv) != 2:
+        print("Использование: python import_data.py <путь_к_файлу>")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
     print(f"\nАнализ файла {file_path}...")
     data = parse_excel(file_path)
 

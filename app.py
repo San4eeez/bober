@@ -7,6 +7,9 @@ import io
 import logging
 import subprocess
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
 
@@ -349,7 +352,6 @@ def search():
             conn.close()
     return redirect(url_for('index'))
 
-
 @app.route('/get_characteristics_for_entity')
 def get_characteristics_for_entity():
     """Получает список характеристик для конкретной сущности"""
@@ -674,14 +676,28 @@ def update_kkn():
 def run_updater():
     """Запускает скрипт обновления справочника ККН."""
     try:
-        print("Запустилось обновление, ЖДИ 2 МИНУТЫ")
-        result = subprocess.run(['python', 'updater_kkn_list.py'], capture_output=True, text=True)
+        logging.info("Начало обновления справочника ККН")
+        # Save the uploaded file
+        file = request.files['file']
+        if not file:
+            logging.error("Файл не загружен")
+            return jsonify({'success': False, 'error': 'No file uploaded'})
+
+        file_path = 'uploaded_file.xlsx'
+        file.save(file_path)
+        logging.info(f"Файл сохранен: {file_path}")
+
+        # Run the import_data.py script with the uploaded file
+        logging.info("Запуск скрипта import_data.py")
+        result = subprocess.run(['python', 'import_data.py', file_path], capture_output=True, text=True)
         if result.returncode == 0:
-            print("Обновление завершено!")
+            logging.info("Обновление завершено успешно")
             return jsonify({'success': True})
         else:
+            logging.error(f"Ошибка при выполнении скрипта: {result.stderr}")
             return jsonify({'success': False, 'error': result.stderr})
     except Exception as e:
+        logging.error(f"Исключение при обновлении: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
