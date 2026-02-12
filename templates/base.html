@@ -115,39 +115,39 @@
 
         // Применение фильтров
         function applyFilters() {
-    const selectedEntity = "{{ entities[0].name if entities else '' }}";
-    if (!selectedEntity) {
-        alert('Сущность не найдена.');
-        return;
-    }
+            const selectedEntity = "{{ entities[0].name if entities else '' }}";
+            if (!selectedEntity) {
+                alert('Сущность не найдена.');
+                return;
+            }
 
-    const selects = document.querySelectorAll('#filters-container select');
-    const filters = {};
+            const selects = document.querySelectorAll('#filters-container select');
+            const filters = {};
 
-    selects.forEach(select => {
-        const charName = select.getAttribute('data-char');
-        const value = select.value.trim();
-        if (value) {
-            filters[charName] = value;
+            selects.forEach(select => {
+                const charName = select.getAttribute('data-char');
+                const value = select.value.trim();
+                if (value) {
+                    filters[charName] = value;
+                }
+            });
+
+            if (Object.keys(filters).length === 0) {
+                alert('Пожалуйста, укажите хотя бы один фильтр.');
+                return;
+            }
+
+            fetch('/filter_by_params', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({entity: selectedEntity, filters})
+            })
+                .then(res => res.text())
+                .then(html => {
+                    document.getElementById('all-data').innerHTML = html;
+                })
+                .catch(err => console.error('Ошибка фильтра:', err));
         }
-    });
-
-    if (Object.keys(filters).length === 0) {
-        alert('Пожалуйста, укажите хотя бы один фильтр.');
-        return;
-    }
-
-    fetch('/filter_by_params', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity: selectedEntity, filters })
-    })
-    .then(res => res.text())
-    .then(html => {
-        document.getElementById('all-data').innerHTML = html;
-    })
-    .catch(err => console.error('Ошибка фильтра:', err));
-}
 
 
         // Очистка фильтров
@@ -210,7 +210,7 @@
         }
 
         // Обработка корзины
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             updateCartCounter();
         });
 
@@ -224,7 +224,7 @@
                 });
         }
 
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             // Управление количеством
             if (e.target.classList.contains('quantity-btn')) {
                 const btn = e.target;
@@ -260,17 +260,17 @@
         // Очистка корзины
         const clearCartBtn = document.getElementById('clear-cart');
         if (clearCartBtn) {
-            clearCartBtn.addEventListener('click', function() {
+            clearCartBtn.addEventListener('click', function () {
                 if (confirm('Вы уверены, что хотите очистить корзину?')) {
                     fetch('/clear_cart', {
                         method: 'POST'
                     })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            location.reload();
-                        }
-                    });
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                location.reload();
+                            }
+                        });
                 }
             });
         }
@@ -287,13 +287,13 @@
                     quantity: quantity
                 })
             })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    updateCartCounter();
-                    showNotification(`Добавлено ${quantity} шт. в корзину`);
-                }
-            });
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        updateCartCounter();
+                        showNotification(`Добавлено ${quantity} шт. в корзину`);
+                    }
+                });
         }
 
         function removeFromCart(objectId) {
@@ -302,22 +302,22 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ object_id: objectId })
+                body: JSON.stringify({object_id: objectId})
             })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    updateCartCounter();
-                    const itemElement = document.querySelector(`.object[data-object-id="${objectId}"]`);
-                    if (itemElement) {
-                        itemElement.remove();
-                        showNotification('Товар удалён из корзины');
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        updateCartCounter();
+                        const itemElement = document.querySelector(`.object[data-object-id="${objectId}"]`);
+                        if (itemElement) {
+                            itemElement.remove();
+                            showNotification('Товар удалён из корзины');
+                        }
+                        if (data.cart_count === 0) {
+                            setTimeout(() => location.reload(), 1000);
+                        }
                     }
-                    if (data.cart_count === 0) {
-                        setTimeout(() => location.reload(), 1000);
-                    }
-                }
-            });
+                });
         }
 
         function updateCartItem(objectId, quantity) {
@@ -331,12 +331,12 @@
                     quantity: quantity
                 })
             })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    updateCartCounter();
-                }
-            });
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        updateCartCounter();
+                    }
+                });
         }
 
         function showNotification(message) {
@@ -349,31 +349,65 @@
             }, 2000);
         }
 
-        // Логика для генерации таблицы
-        const generateTableBtn = document.getElementById('generate-table');
-        if (generateTableBtn) {
-            generateTableBtn.addEventListener('click', function() {
-                fetch('/generate_table', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        cart_items: {{ session.get('cart', {})|tojson }}
-                    })
-                })
-                .then(response => response.blob())
-                .then(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'filtered_part.xlsx';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                })
-                .catch(error => console.error('Error generating table:', error));
-            });
+
+            document.addEventListener('DOMContentLoaded', () => {
+
+            const generateTableBtn = document.getElementById('generate-table');
+            if (!generateTableBtn) return;
+
+            generateTableBtn.addEventListener('click', async () => {
+
+            // прогрессбар
+            const progressBox = document.createElement('div');
+            progressBox.className = 'progress-box';
+            progressBox.innerHTML = `
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div id="progress-text">Подготовка...</div>
+        `;
+            document.body.appendChild(progressBox);
+
+            // запуск генерации
+            const start = await fetch('/start_generate_table', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+            cart_items: {{session.get('cart', {})|tojson}}
+        })
+        });
+
+            const data = await start.json();
+            const job_id = data.job_id;
+
+            // слушаем прогресс
+            const evtSource = new EventSource(`/progress/${job_id}`);
+
+            evtSource.onmessage = function(event) {
+
+            if (event.data === "done") {
+            evtSource.close();
+            document.getElementById('progress-text').textContent = "Скачивание...";
+            window.location = `/download_table/${job_id}`;
+            setTimeout(() => progressBox.remove(), 2000);
+            return;
         }
+
+            if (event.data.startsWith("error")) {
+            evtSource.close();
+            alert("Ошибка генерации файла");
+            progressBox.remove();
+            return;
+        }
+
+            const percent = parseInt(event.data);
+            document.getElementById('progress-fill').style.width = percent + '%';
+            document.getElementById('progress-text').textContent = `Генерация: ${percent}%`;
+        };
+
+        });
+        });
     </script>
+
 </body>
 </html>

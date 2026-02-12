@@ -11,6 +11,12 @@ import threading
 from queue import Queue
 from flask import Response
 from import_data import parse_excel, import_to_database
+from uuid import uuid4
+import os
+from uuid import uuid4
+import os
+from queue import Queue
+import threading
 
 
 # Configure logging
@@ -18,6 +24,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
+
+# Очереди прогресса выгрузки генерации
+table_jobs = {}
 # Очереди прогресса импорта
 progress_queues = {}
 
@@ -88,12 +97,43 @@ def filter_entities_by_default(category, subcategory):
 
 logging.basicConfig(level=logging.INFO)
 
-@app.route('/generate_table', methods=['POST'])
-def generate_table():
+
+@app.route('/start_generate_table', methods=['POST'])
+def start_generate_table():
+    """Запускает генерацию таблицы в фоне"""
+
     cart_items = request.json.get('cart_items')
+    if not cart_items:
+        return jsonify({'error': 'cart empty'}), 400
+
+    job_id = str(uuid4())
+    q = Queue()
+    progress_queues[job_id] = q
+
+    output_file = f"generated_{job_id}.xlsx"
+
+    def run():
+        try:
+            def progress(percent):
+                q.put(percent)
+
+            generate_table(cart_items, output_file, progress)
+
+            q.put("done")
+
+        except Exception as e:
+            logging.exception("Ошибка генерации Excel")
+            q.put(f"error:{str(e)}")
+
+    threading.Thread(target=run, daemon=True).start()
+
+    return jsonify({"job_id": job_id})
+
+def generate_table(cart_items, output_file, progress):
+    """Генерирует Excel таблицу с прогрессом"""
+
     object_names = []
 
-    # Получаем имена объектов из корзины
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -102,53 +142,38 @@ def generate_table():
             object_name = cur.fetchone()
             if object_name:
                 object_names.append(object_name[0])
-                logging.info(f"Added object name: {object_name[0]}")
     finally:
         cur.close()
         conn.close()
 
-    # Чтение файла Excel
-    file_path = "doc.xlsx"
-    try:
-        df = pd.read_excel(file_path, header=None)
-    except Exception as e:
-        logging.error(f"Error reading Excel file: {e}")
-        return jsonify({'error': 'Error reading Excel file'}), 500
+    progress(5)
 
-    # Получение заголовков (первые 4 строки)
+    df = pd.read_excel("doc.xlsx", header=None)
+
+    progress(15)
+
     headers = df.iloc[:4]
-
-    # Создание нового DataFrame для хранения результатов
     result_df = headers.copy()
 
-    # Проходим по каждому наименованию объекта
-    for name in object_names:
-        logging.info(f"Processing object name: {name}")
-        # Нахождение индексов строк, где наименование объекта совпадает
+    total = len(object_names) if object_names else 1
+
+    for i, name in enumerate(object_names):
         matching_rows = df[df[1] == name]
+
         if not matching_rows.empty:
             start_index = matching_rows.index[0]
-
-            # Находим следующее наименование объекта или конец файла
-            if start_index + 1 < len(df):
-                next_name_index = df[df[1].notna()].index[df[df[1].notna()].index > start_index].min()
-            else:
+            next_name_index = df[df[1].notna()].index[df[df[1].notna()].index > start_index].min()
+            if pd.isna(next_name_index):
                 next_name_index = len(df)
 
-            # Выборка данных между найденными индексами
             selected_data = df.iloc[start_index:next_name_index]
-
-            # Добавление выбранных данных в результирующий DataFrame
             result_df = pd.concat([result_df, selected_data], ignore_index=True)
-        else:
-            logging.warning(f"No matching rows found for object name: {name}")
 
-    # Добавление столбца "Количество" после второго столбца
+        progress(15 + int((i + 1) / total * 50))
+
     result_df.insert(2, "Количество", "")
 
-    # Заполнение столбца "Количество" значениями из корзины
     for object_id, quantity in cart_items.items():
-        # Получаем имя объекта по его ID
         conn = get_db_connection()
         cur = conn.cursor()
         try:
@@ -160,16 +185,30 @@ def generate_table():
             cur.close()
             conn.close()
 
-    # Добавление заголовка "Количество" в первые 4 строки
     result_df.iloc[0, 2] = "Количество"
 
-    # Сохранение результата в новый файл Excel
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        result_df.to_excel(writer, index=False, header=False)
-    output.seek(0)
+    progress(80)
 
-    return send_file(output, as_attachment=True, download_name='filtered_part.xlsx')
+    with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+        result_df.to_excel(writer, index=False, header=False)
+
+    progress(100)
+
+
+
+
+
+
+
+
+
+
+@app.route('/download_table/<job_id>')
+def download_table(job_id):
+    file = f"generated_{job_id}.xlsx"
+    if not os.path.exists(file):
+        return "Not ready", 404
+    return send_file(file, as_attachment=True)
 
 @app.route('/')
 def index():
