@@ -14,35 +14,42 @@
         <div class="object" data-object-id="{{ obj.id }}">
             <div class="object-header">
                 <h3 class="object-name">{{ obj.name }}</h3>
+
                 <div class="object-actions">
                     <div class="quantity-controls">
                         <button class="quantity-btn minus" data-object-id="{{ obj.id }}">-</button>
+
                         <span class="quantity">
-                            {% if request.path == url_for('view_cart') %}
+                            {% if mode == 'cart' %}
                                 {{ cart_items.get(obj.id|string, 1) }}
                             {% else %}
                                 1
                             {% endif %}
                         </span>
+
                         <button class="quantity-btn plus" data-object-id="{{ obj.id }}">+</button>
                     </div>
-                    {% if request.path == url_for('view_cart') %}
+
+                    {% if mode == 'cart' %}
                         <button class="remove-from-cart" data-object-id="{{ obj.id }}">Удалить</button>
                     {% else %}
                         <button class="add-to-cart" data-object-id="{{ obj.id }}">В корзину</button>
                     {% endif %}
                 </div>
             </div>
+
             <div class="properties-list">
                 {% for char_id, char_info in obj.characteristics_info.items() %}
                 <div class="property">
                     <div class="property-name">{{ char_info.name }}</div>
+
                     <div class="property-value">
                         {% if char_info.value.startswith('http') %}
                             <a href="{{ char_info.value }}" target="_blank">{{ char_info.value }}</a>
                         {% else %}
                             {{ char_info.value }}
                         {% endif %}
+
                         {% if char_info.unit %}
                             <span class="unit">{{ char_info.unit }}</span>
                         {% endif %}

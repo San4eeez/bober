@@ -115,36 +115,40 @@
 
         // Применение фильтров
         function applyFilters() {
-            const selectedEntity = "{{ entities[0].name if entities else '' }}";
-            if (!selectedEntity) {
-                alert('Сущность не найдена.');
-                return;
-            }
-            const selects = document.querySelectorAll('#filters-container select');
-            const filters = {};
-            selects.forEach(select => {
-                const charName = select.getAttribute('data-char');
-                const value = select.value.trim();
-                if (value) {
-                    filters[charName] = value;
-                }
-            });
-            if (Object.keys(filters).length === 0) {
-                alert('Пожалуйста, укажите хотя бы один фильтр.');
-                return;
-            }
-            fetch('/filter_by_params', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ entity: selectedEntity, filters })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    updatePageWithFilteredData(data);
-                });
+    const selectedEntity = "{{ entities[0].name if entities else '' }}";
+    if (!selectedEntity) {
+        alert('Сущность не найдена.');
+        return;
+    }
+
+    const selects = document.querySelectorAll('#filters-container select');
+    const filters = {};
+
+    selects.forEach(select => {
+        const charName = select.getAttribute('data-char');
+        const value = select.value.trim();
+        if (value) {
+            filters[charName] = value;
         }
+    });
+
+    if (Object.keys(filters).length === 0) {
+        alert('Пожалуйста, укажите хотя бы один фильтр.');
+        return;
+    }
+
+    fetch('/filter_by_params', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: selectedEntity, filters })
+    })
+    .then(res => res.text())
+    .then(html => {
+        document.getElementById('all-data').innerHTML = html;
+    })
+    .catch(err => console.error('Ошибка фильтра:', err));
+}
+
 
         // Очистка фильтров
         function clearFilters() {

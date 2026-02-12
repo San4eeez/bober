@@ -79,7 +79,9 @@ def filter_entities_by_default(category, subcategory):
         filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
         return render_template('index.html',
                                categories=[{'name': k, **v} for k, v in categories_data.items()],
-                               entities=filtered_entities)
+                               entities=filtered_entities,
+                               mode='catalog')
+
     finally:
         cur.close()
         conn.close()
@@ -211,7 +213,9 @@ def index():
         entities = get_all_data()
         return render_template('index.html',
                                categories=[{'name': k, **v} for k, v in categories.items()],
-                               entities=entities)
+                               entities=entities,
+                               mode='catalog')
+
     finally:
         cur.close()
         conn.close()
@@ -258,7 +262,9 @@ def filter_entities():
         filtered_entities = [e for e in all_entities if e['id'] in entity_ids]
         return render_template('index.html',
                                categories=[{'name': k, **v} for k, v in categories_data.items()],
-                               entities=filtered_entities)
+                               entities=filtered_entities,
+                               mode='catalog')
+
     finally:
         cur.close()
         conn.close()
@@ -355,7 +361,9 @@ def search():
 
             return render_template('index.html',
                                    categories=[{'name': k, **v} for k, v in categories_data.items()],
-                                   entities=entities)
+                                   entities=entities,
+                                   mode='catalog')
+
         finally:
             cur.close()
             conn.close()
@@ -409,12 +417,14 @@ def filter_by_params():
     data = request.json
     entity_name = data.get('entity')
     filters = data.get('filters')
+
     if not entity_name or not filters:
         return jsonify([])
+
     conn = get_db_connection()
     cur = conn.cursor()
+
     try:
-        # 1. Получаем ID объектов, которые соответствуют фильтрам
         query = """
             SELECT DISTINCT o.id
             FROM object_values ov
@@ -423,41 +433,49 @@ def filter_by_params():
             JOIN entity_characteristics ec ON ov.characteristic_id = ec.id
             WHERE e.name = %s
         """
+
         params = [entity_name]
+
         for char_name, value in filters.items():
             query += " AND ec.name = %s AND ov.value = %s"
             params.extend([char_name, value])
+
         cur.execute(query, params)
         filtered_object_ids = [row[0] for row in cur.fetchall()]
 
-        # Если нет подходящих объектов, возвращаем пустой список
         if not filtered_object_ids:
             return jsonify([])
 
-        # 2. Получаем полные данные для отфильтрованных объектов
+        # БЕРЁМ ПОЛНУЮ СТРУКТУРУ
         all_entities = get_all_data()
-        filtered_entities = []
+
+        result = []
         for entity in all_entities:
             if entity['name'] == entity_name:
-                # Фильтруем объекты по их ID
+
                 filtered_objects = [
                     obj for obj in entity['objects']
                     if obj['id'] in filtered_object_ids
                 ]
+
                 if filtered_objects:
-                    filtered_entity = {
+                    result.append({
                         'id': entity['id'],
                         'name': entity['name'],
                         'category': entity['category'],
                         'subcategory': entity['subcategory'],
                         'characteristics': entity['characteristics'],
                         'objects': filtered_objects
-                    }
-                    filtered_entities.append(filtered_entity)
-        return jsonify(filtered_entities)
+                    })
+
+        return render_template('_entities_block.html', entities=result, mode='catalog')
+
+
     finally:
         cur.close()
         conn.close()
+
+
 
 def get_all_data():
     conn = get_db_connection()
@@ -597,7 +615,8 @@ def view_cart():
     cart_entities = get_entities_by_object_ids(session['cart'].keys())
     return render_template('cart.html',
                            cart_entities=cart_entities,
-                           cart_items=session['cart'])
+                           cart_items=session['cart'],
+                           mode='cart')
 
 def get_entities_by_object_ids(object_ids):
     if not object_ids:
