@@ -689,7 +689,13 @@ def run_updater():
 
         # Run the import_data.py script with the uploaded file
         logging.info("Запуск скрипта import_data.py")
-        result = subprocess.run(['python', 'import_data.py', file_path], capture_output=True, text=True)
+        result = subprocess.run(
+            ['python', 'import_data.py', file_path],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace'  # ← важно!
+        )
         if result.returncode == 0:
             logging.info("Обновление завершено успешно")
             return jsonify({'success': True})
