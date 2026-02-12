@@ -6,12 +6,21 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import io
 import logging
 import subprocess
+import subprocess
+import threading
+from queue import Queue
+from flask import Response
+from import_data import parse_excel, import_to_database
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Замените на надежный ключ в продакшене
+# Очереди прогресса импорта
+progress_queues = {}
+
 
 # Конфигурация БД
 DB_CONFIG = {
@@ -672,39 +681,66 @@ def update_kkn():
         pass
     return render_template('update_kkn.html', update_log=update_log)
 
-@app.route('/run_updater', methods=['POST'])
-def run_updater():
-    """Запускает скрипт обновления справочника ККН."""
+@app.route('/start_import', methods=['POST'])
+def start_import():
+    """Запускает обновление справочника в фоне"""
     try:
         logging.info("Начало обновления справочника ККН")
-        # Save the uploaded file
-        file = request.files['file']
+
+        file = request.files.get('file')
         if not file:
-            logging.error("Файл не загружен")
-            return jsonify({'success': False, 'error': 'No file uploaded'})
+            return jsonify({'error': 'No file uploaded'}), 400
 
         file_path = 'uploaded_file.xlsx'
         file.save(file_path)
-        logging.info(f"Файл сохранен: {file_path}")
 
-        # Run the import_data.py script with the uploaded file
-        logging.info("Запуск скрипта import_data.py")
-        result = subprocess.run(
-            ['python', 'import_data.py', file_path],
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='replace'  # ← важно!
-        )
-        if result.returncode == 0:
-            logging.info("Обновление завершено успешно")
-            return jsonify({'success': True})
-        else:
-            logging.error(f"Ошибка при выполнении скрипта: {result.stderr}")
-            return jsonify({'success': False, 'error': result.stderr})
+        job_id = str(len(progress_queues) + 1)
+        q = Queue()
+        progress_queues[job_id] = q
+
+        def run_import():
+            try:
+                def progress(percent):
+                    q.put(percent)
+
+                data = parse_excel(file_path)
+                import_to_database(data, progress_cb=progress)
+
+                q.put("done")
+                logging.info("Импорт завершён")
+
+            except Exception as e:
+                logging.exception("Ошибка импорта")
+                q.put(f"error:{str(e)}")
+
+        threading.Thread(target=run_import, daemon=True).start()
+
+        return jsonify({'job_id': job_id})
+
     except Exception as e:
-        logging.error(f"Исключение при обновлении: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/progress/<job_id>')
+def progress(job_id):
+    """Отдаёт прогресс импорта в реальном времени"""
+
+    def generate():
+        q = progress_queues.get(job_id)
+        if not q:
+            yield "data: error:job_not_found\n\n"
+            return
+
+        while True:
+            msg = q.get()
+            yield f"data: {msg}\n\n"
+
+            if msg == "done" or str(msg).startswith("error"):
+                break
+
+        progress_queues.pop(job_id, None)
+
+    return Response(generate(), mimetype='text/event-stream')
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

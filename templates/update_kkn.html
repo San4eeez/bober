@@ -5,68 +5,124 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Обновить справочник ККН</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+    <style>
+        .progress-wrapper {
+            margin-top: 20px;
+            width: 500px;
+            border: 1px solid #aaa;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #eee;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 30px;
+            background: #4caf50;
+            color: white;
+            text-align: center;
+            line-height: 30px;
+            transition: width 0.3s ease;
+            font-weight: bold;
+        }
+
+        .notification {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <nav>
-            <a href="/" class="nav-button">Главная</a>
-            <a href="/update_kkn" class="nav-button">Обновить справочник</a>
-            <a href="/cart" class="nav-button">
-                Корзина (<span id="cart-counter">{{ session.get('cart', {}).values()|sum }}</span>)
-            </a>
-        </nav>
-    </header>
-    <div class="container">
-        <h1>Обновить справочник ККН</h1>
-        <button id="update-button">Обновить справочник ККН</button>
-        <input type="file" id="file-input" accept=".xlsx" />
-        <div id="update-log">
-            {% if update_log %}
-                <h2>История обновлений:</h2>
-                <pre>{{ update_log }}</pre>
-            {% endif %}
-        </div>
-        <div id="notification" class="notification" style="display: none;"></div>
+
+<header>
+    <nav>
+        <a href="/" class="nav-button">Главная</a>
+        <a href="/update_kkn" class="nav-button">Обновить справочник</a>
+        <a href="/cart" class="nav-button">
+            Корзина (<span id="cart-counter">{{ session.get('cart', {}).values()|sum }}</span>)
+        </a>
+    </nav>
+</header>
+
+<div class="container">
+    <h1>Обновить справочник ККН</h1>
+
+    <input type="file" id="file-input" accept=".xlsx" />
+    <br><br>
+    <button id="update-button">Начать обновление</button>
+
+    <div class="progress-wrapper">
+        <div id="progress-bar" class="progress-bar">0%</div>
     </div>
-    <script>
-        document.getElementById('update-button').addEventListener('click', function() {
-            const fileInput = document.getElementById('file-input');
-            const file = fileInput.files[0];
-            if (!file) {
-                document.getElementById('notification').textContent = 'Пожалуйста, выберите файл для загрузки.';
-                document.getElementById('notification').style.display = 'block';
-                return;
-            }
 
-            const formData = new FormData();
-            formData.append('file', file);
+    <div id="notification" class="notification"></div>
 
-            document.getElementById('notification').textContent = 'Началось обновление, ожидай 2 минуты. (ДА, ЦЕЛЫХ ДВЕ МИНУТЫ НИЧЕГО НЕ НАЖИМАЙ)';
-            document.getElementById('notification').style.display = 'none';
+</div>
 
-            fetch('/run_updater', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('notification').textContent = 'Обновление завершено';
-                    document.getElementById('notification').style.display = 'block';
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    document.getElementById('notification').textContent = 'Ошибка при обновлении';
-                    document.getElementById('notification').style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('notification').textContent = 'Ошибка при обновлении';
-                document.getElementById('notification').style.display = 'block';
-            });
-        });
-    </script>
+<script>
+const btn = document.getElementById('update-button');
+const notif = document.getElementById('notification');
+const bar = document.getElementById('progress-bar');
+
+btn.addEventListener('click', async function() {
+
+    const file = document.getElementById('file-input').files[0];
+
+    if (!file) {
+        notif.textContent = 'Выберите Excel файл';
+        return;
+    }
+
+    btn.disabled = true;
+    notif.textContent = 'Загрузка файла...';
+    bar.style.width = '0%';
+    bar.textContent = '0%';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Запускаем импорт
+    const res = await fetch('/start_import', {
+        method: 'POST',
+        body: formData
+    });
+
+    const data = await res.json();
+    const jobId = data.job_id;
+
+    notif.textContent = 'Импорт начался...';
+
+    // Подписываемся на прогресс
+    const evt = new EventSource('/progress/' + jobId);
+
+    evt.onmessage = (e) => {
+
+        if (e.data === "done") {
+            bar.style.width = '100%';
+            bar.textContent = 'Готово';
+            notif.textContent = 'Справочник успешно обновлён!';
+            btn.disabled = false;
+            evt.close();
+
+            setTimeout(() => location.reload(), 2000);
+            return;
+        }
+
+        if (e.data.startsWith("error")) {
+            notif.textContent = 'Ошибка: ' + e.data.replace('error:', '');
+            btn.disabled = false;
+            evt.close();
+            return;
+        }
+
+        const percent = parseInt(e.data);
+        bar.style.width = percent + '%';
+        bar.textContent = percent + '%';
+        notif.textContent = 'Импорт: ' + percent + '%';
+    };
+});
+</script>
+
 </body>
 </html>
